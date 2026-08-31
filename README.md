@@ -269,3 +269,7 @@ sudo ss -ltnp '( sport = :80 or sport = :443 )'
 - [Xray REALITY 官方配置文档](https://xtls.github.io/en/config/transports/reality.html)
 - [Xray-core 官方容器镜像](https://github.com/XTLS/Xray-core/pkgs/container/xray-core)
 - [Caddy Automatic HTTPS](https://caddyserver.com/docs/automatic-https)
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE)。
