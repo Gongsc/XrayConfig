@@ -34,6 +34,12 @@ ruby -e '
   caddy = compose.fetch("services").fetch("caddy")
   abort "Caddy must retain NET_BIND_SERVICE" unless caddy.fetch("cap_add") == ["NET_BIND_SERVICE"]
   abort "Caddy must still drop default capabilities" unless caddy.fetch("cap_drop") == ["ALL"]
+  compose.fetch("services").each do |name, service|
+    logging = service.fetch("logging")
+    abort "#{name} must use local log rotation" unless logging.fetch("driver") == "local"
+    abort "#{name} max-size is not configurable" unless logging.fetch("options").fetch("max-size") == "${LOG_MAX_SIZE:-10m}"
+    abort "#{name} max-file is not configurable" unless logging.fetch("options").fetch("max-file") == "${LOG_MAX_FILE:-3}"
+  end
 ' "$TEST_DIR/compose.yaml"
 
 "$TEST_DIR/manage.sh" init >/dev/null

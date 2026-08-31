@@ -168,6 +168,32 @@ openssl s_client -connect node.example.com:443 -servername node.example.com </de
 
 备份文件保存在 `backups/`，包含 `.env`、服务端私钥和客户端凭据，权限为 `0600`。请像保管密码一样保存它，并将副本放到受保护的异机存储。
 
+### 控制日志大小
+
+Xray 和 Caddy 均使用 Docker 推荐的 `local` 日志驱动并自动轮转。默认每个服务保留 3 个日志文件、每个最多约 10 MB，轮转文件由 Docker 自动压缩，即每个服务最多约 30 MB 未压缩日志：
+
+```dotenv
+LOG_MAX_SIZE=10m
+LOG_MAX_FILE=3
+```
+
+修改 `.env` 后必须重建容器，单纯执行 `restart` 不会更新容器日志驱动：
+
+```bash
+./manage.sh validate
+docker compose --env-file .env up -d --force-recreate
+```
+
+日志仍通过以下命令查看，不要直接操作 Docker 数据目录中的日志文件：
+
+```bash
+./manage.sh logs
+./manage.sh logs caddy
+./manage.sh logs xray
+```
+
+Docker `local` 驱动的轮转参数参见[官方文档](https://docs.docker.com/engine/logging/drivers/local/)。
+
 ### 轮换凭据
 
 ```bash

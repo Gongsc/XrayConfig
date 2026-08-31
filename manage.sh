@@ -59,6 +59,8 @@ load_env() {
   CLIENT_NAME="${CLIENT_NAME:-home-reality}"
   XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.7.11}"
   CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.11.4-alpine}"
+  LOG_MAX_SIZE="${LOG_MAX_SIZE:-10m}"
+  LOG_MAX_FILE="${LOG_MAX_FILE:-3}"
 
   [[ "$DOMAIN" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]] || \
     die "DOMAIN must be a hostname such as node.example.com (no scheme, path, wildcard or port)."
@@ -70,6 +72,10 @@ load_env() {
   fi
 
   [[ -n "$CLIENT_NAME" ]] || die "CLIENT_NAME must not be empty."
+  [[ "$LOG_MAX_SIZE" =~ ^[1-9][0-9]*[kKmMgG]$ ]] || \
+    die "LOG_MAX_SIZE must be a positive size such as 10m or 1g."
+  [[ "$LOG_MAX_FILE" =~ ^[1-9][0-9]*$ ]] || \
+    die "LOG_MAX_FILE must be a positive integer."
 }
 
 require_docker() {
