@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vless-reality-test.XXXXXX")"
+
+cleanup() {
+  rm -rf -- "$TEST_DIR"
+}
+trap cleanup EXIT
+
+cp -R "$REPO_DIR/.env.example" "$REPO_DIR/compose.yaml" "$REPO_DIR/manage.sh" \
+  "$REPO_DIR/templates" "$REPO_DIR/site" "$TEST_DIR/"
+
+sed \
+  -e 's/^DOMAIN=.*/DOMAIN=node.example.com/' \
+  -e 's/^ACME_EMAIL=.*/ACME_EMAIL=ops@example.com/' \
+  -e 's/^CLIENT_NAME=.*/CLIENT_NAME="Smoke Test"/' \
+  "$TEST_DIR/.env.example" >"$TEST_DIR/.env"
+
+export PATH="$REPO_DIR/tests/fake-bin:$PATH"
+
+"$TEST_DIR/manage.sh" init >/dev/null
+
+first_credentials="$(cksum "$TEST_DIR/generated/credentials.env")"
+"$TEST_DIR/manage.sh" init >/dev/null
+second_credentials="$(cksum "$TEST_DIR/generated/credentials.env")"
+
+[[ "$first_credentials" == "$second_credentials" ]]
+grep -q '"target": "caddy:8443"' "$TEST_DIR/generated/xray/config.json"
+grep -q '"node.example.com"' "$TEST_DIR/generated/xray/config.json"
+grep -q '^  email ops@example.com$' "$TEST_DIR/generated/Caddyfile"
+grep -q '^node.example.com {' "$TEST_DIR/generated/Caddyfile"
+grep -Eq '^vless://11111111-2222-4333-8444-555555555555@node\.example\.com:443\?.*pbk=BBBB.*sid=[0-9a-f]{16}.*#Smoke%20Test$' \
+  "$TEST_DIR/generated/client.txt"
+
+"$TEST_DIR/manage.sh" validate >/dev/null
+"$TEST_DIR/manage.sh" backup >/dev/null
+
+[[ "$(find "$TEST_DIR/backups" -name '*.tar.gz' | wc -l | tr -d ' ')" == "1" ]]
+
+file_mode() {
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
+}
+
+[[ "$(file_mode "$TEST_DIR/generated/credentials.env")" == "600" ]]
+[[ "$(file_mode "$TEST_DIR/generated/xray/config.json")" == "600" ]]
+[[ "$(file_mode "$TEST_DIR/generated/client.txt")" == "600" ]]
+
+printf '%s\n' 'Smoke tests passed.'

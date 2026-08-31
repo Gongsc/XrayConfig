@@ -1,0 +1,198 @@
+# VLESS + REALITY 与普通 HTTPS 网站共用 443
+
+这个项目在同一台 VPS 上运行两个容器：
+
+```text
+浏览器 ── HTTPS :443 ──┐
+                       ├─ Xray :8443 ── 未通过 REALITY 验证 ── Caddy :8443 ── 静态网站
+代理客户端 ─ REALITY ──┘              └─ 验证通过 ──────────── Internet
+
+ACME CA ── HTTP :80 ───────────────────────────────────────── Caddy :8080
+```
+
+公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy，因此访问同一个域名会看到正常 HTTPS 页面。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。
+
+## 前提条件
+
+- Ubuntu 或 Debian VPS，已安装 Docker Engine 和 Docker Compose v2。
+- 一个 DNS-only 域名，例如 `node.example.com`，A/AAAA 记录直接指向该 VPS。
+- 不可启用 Cloudflare 橙云或其他 CDN/四层代理，否则 REALITY 客户端无法直连 Xray。
+- 公网 TCP 80、443 未被其他程序占用。
+- 云厂商安全组和系统防火墙允许 TCP 80、443 入站。
+- 客户端需要支持当前 REALITY。所固定的 Xray 版本默认要求 Xray 客户端核心不低于 `26.3.27`；使用 v2rayN、v2rayNG 等客户端时请升级其内置核心。
+
+如果启用了 UFW，可执行：
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw status
+```
+
+如果域名有 AAAA 记录，它也必须指向这台 VPS；错误的 AAAA 记录通常会导致部分访问失败或 ACME 证书签发失败。
+
+## 部署
+
+1. 创建环境文件：
+
+   ```bash
+   cp .env.example .env
+   nano .env
+   ```
+
+   至少将 `DOMAIN` 改成真实域名。`ACME_EMAIL` 可留空；`CLIENT_NAME` 只影响分享链接显示名称。
+
+2. 运行初始化：
+
+   ```bash
+   chmod +x manage.sh
+   ./manage.sh init
+   ```
+
+   初始化会拉取固定版本的官方 Xray 镜像，并生成 UUID、X25519 密钥和 16 位 short ID。再次运行 `init` 会保留原凭据，只重新渲染配置。
+
+3. 验证并启动：
+
+   ```bash
+   ./manage.sh validate
+   ./manage.sh up
+   ```
+
+4. 查看客户端导入链接：
+
+   ```bash
+   ./manage.sh show-client
+   ```
+
+   链接包含以下参数：
+
+   - 地址：环境文件中的域名
+   - 端口：`443`
+   - 传输：TCP
+   - Flow：`xtls-rprx-vision`
+   - 安全：REALITY
+   - SNI：同一域名
+   - 指纹：Chrome
+   - `pbk`：Xray `x25519` 输出的 Password/PublicKey
+   - `sid`：随机 short ID
+
+## 验证部署结果
+
+查看容器和日志：
+
+```bash
+./manage.sh status
+./manage.sh logs caddy
+./manage.sh logs xray
+```
+
+从 VPS 之外的网络检查普通网站：
+
+```bash
+curl -vI https://node.example.com/
+openssl s_client -connect node.example.com:443 -servername node.example.com </dev/null
+```
+
+将示例域名替换为实际域名。验收结果应为：
+
+- 浏览器访问 `https://DOMAIN` 显示“ 一切运行正常 ”页面。
+- HTTPS 证书有效，证书域名与 `DOMAIN` 一致。
+- 分享链接可导入客户端，并能通过 VPS 访问 TCP 和 UDP 目标。
+- 通过代理查询公网 IP 时显示 VPS 的出口地址。
+- 错误 UUID 或 short ID 不能使用代理，普通浏览器访问仍会显示网站。
+- `docker compose ps` 仅显示宿主机公开 `80/tcp` 和 `443/tcp`；Caddy 的 `8443` 不应出现在公网端口列表中。
+
+## 日常运维
+
+常用命令：
+
+```bash
+./manage.sh status
+./manage.sh restart
+./manage.sh down
+./manage.sh logs
+```
+
+`down` 不会删除 Caddy 的证书卷。不要运行 `docker compose down -v`，除非确定要删除已签发证书和 Caddy 状态。
+
+### 备份
+
+```bash
+./manage.sh backup
+```
+
+备份文件保存在 `backups/`，包含 `.env`、服务端私钥和客户端凭据，权限为 `0600`。请像保管密码一样保存它，并将副本放到受保护的异机存储。
+
+### 轮换凭据
+
+```bash
+./manage.sh rotate --yes
+```
+
+轮换会先生成私密备份，然后替换 UUID、X25519 密钥和 short ID。所有旧客户端会立即断开，必须重新导入 `show-client` 输出的新链接。上一次的凭据文件还会暂存在 `generated/credentials.env.previous`；下一次轮换前请按自己的回滚策略妥善处理。
+
+### 升级镜像
+
+镜像版本固定在 `.env` 中。升级前先阅读 Xray 与 Caddy 的发行说明并备份：
+
+```bash
+./manage.sh backup
+nano .env
+docker compose --env-file .env pull
+./manage.sh validate
+./manage.sh up
+```
+
+升级后必须重新测试普通网站与 REALITY 客户端。不要使用自动更新容器工具无审查地替换这两个镜像。
+
+## 文件与安全说明
+
+- `templates/`：可提交的 Xray 和 Caddy 模板。
+- `site/`：普通静态网站，可自行替换；不要删除健康页面所需文件。
+- `generated/credentials.env`：服务端身份凭据，权限 `0600`。
+- `generated/xray/config.json`：包含 REALITY 私钥，权限 `0600`。
+- `generated/client.txt`：可导入客户端的分享链接，权限 `0600`。
+- `generated/Caddyfile`：渲染后的站点配置，不含 REALITY 密钥。
+
+`generated/`、`.env`、`backups/` 已加入 `.gitignore`。不要将这些文件发送到公开仓库、工单或聊天记录。
+
+Xray 路由会阻止代理客户端访问 `geoip:private` 覆盖的私网和链路本地地址，减少凭据泄露后访问 VPS 内网服务的风险。配置默认不记录 Xray 访问日志；Caddy 仅把普通网站访问日志输出到容器日志。
+
+## 故障排查
+
+### 证书申请失败
+
+1. 检查所有 A/AAAA 记录是否直连当前 VPS。
+2. 确认未启用 CDN 代理。
+3. 确认安全组、UFW 和上游网络允许 TCP 80。
+4. 查看 `./manage.sh logs caddy`。
+5. 注意 Let's Encrypt 的失败次数限制，不要在 DNS 错误时反复重启。
+
+### 网站打不开但代理可用
+
+- 查看 Caddy 是否健康：`./manage.sh status`。
+- 查看 Caddy 是否已取得证书：`./manage.sh logs caddy`。
+- 确认 Xray 配置的 `target` 仍为 `caddy:8443`，且两个容器位于同一 Compose 网络。
+
+### 网站可用但代理无法连接
+
+- 客户端地址必须填写域名而不是 CDN 地址，端口为 443。
+- SNI 必须与 `.env` 中的 `DOMAIN` 完全一致。
+- 检查链接中的 UUID、`pbk`、`sid`、`flow` 和指纹是否完整。
+- 更新客户端及其 Xray 核心，然后检查 `./manage.sh logs xray`。
+- 确保客户端系统时间准确；严重的时间偏差会影响 TLS/REALITY。
+
+### 80 或 443 已被占用
+
+```bash
+sudo ss -ltnp '( sport = :80 or sport = :443 )'
+```
+
+停止或迁移现有 Web/代理服务后再运行 `./manage.sh up`。本项目按独占公网 80、443 设计，不会自动修改其他服务。
+
+## 参考
+
+- [Xray REALITY 官方配置文档](https://xtls.github.io/en/config/transports/reality.html)
+- [Xray-core 官方容器镜像](https://github.com/XTLS/Xray-core/pkgs/container/xray-core)
+- [Caddy Automatic HTTPS](https://caddyserver.com/docs/automatic-https)
+

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ "${1:-}" == "info" ]]; then
+  exit 0
+fi
+
+if [[ "${1:-}" == "run" ]]; then
+  case "${*: -1}" in
+    uuid)
+      printf '%s\n' '11111111-2222-4333-8444-555555555555'
+      ;;
+    x25519)
+      printf '%s\n' \
+        'PrivateKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' \
+        'Password (PublicKey): BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB' \
+        'Hash32: CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
+      ;;
+    *)
+      printf 'unexpected docker run command: %s\n' "$*" >&2
+      exit 1
+      ;;
+  esac
+  exit 0
+fi
+
+if [[ "${1:-}" != "compose" ]]; then
+  printf 'unexpected docker command: %s\n' "$*" >&2
+  exit 1
+fi
+shift
+
+if [[ "${1:-}" == "version" ]]; then
+  printf '%s\n' 'Docker Compose version v2.test'
+  exit 0
+fi
+
+while [[ "${1:-}" == --* ]]; do
+  case "$1" in
+    --project-directory|--env-file)
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+case "${1:-}" in
+  ps)
+    exit 0
+    ;;
+  config|run|up|down|restart|logs)
+    exit 0
+    ;;
+  *)
+    printf 'unexpected docker compose command: %s\n' "$*" >&2
+    exit 1
+    ;;
+esac
+

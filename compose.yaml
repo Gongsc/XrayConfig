@@ -1,0 +1,63 @@
+name: vless-reality-site
+
+services:
+  caddy:
+    image: "${CADDY_IMAGE:-caddy:2.11.4-alpine}"
+    restart: unless-stopped
+    ports:
+      - "80:8080/tcp"
+    volumes:
+      - ./generated/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  xray:
+    image: "${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.7.11}"
+    command: ["run", "-config", "/usr/local/etc/xray/config.json"]
+    restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_healthy
+    ports:
+      - "443:8443/tcp"
+    volumes:
+      - ./generated/xray/config.json:/usr/local/etc/xray/config.json:ro
+    networks:
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/xray", "run", "-test", "-config", "/usr/local/etc/xray/config.json"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  edge:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,6 @@
+.env
+generated/
+backups/
+*.tar.gz
+.DS_Store
+
