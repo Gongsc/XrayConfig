@@ -186,8 +186,11 @@ render_files() {
     "vless://${UUID}@${DOMAIN}:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${DOMAIN}&fp=chrome&pbk=${REALITY_PASSWORD}&sid=${SHORT_ID}&type=tcp#${client_label}" \
     >"$CLIENT_FILE"
 
-  chmod 600 "$CREDENTIALS_FILE" "$XRAY_DIR/config.json" "$CLIENT_FILE"
-  chmod 644 "$CADDY_FILE"
+  # The official Xray image runs as a non-root user. The rendered config must
+  # therefore be world-readable inside the bind mount. Its parent directories
+  # remain mode 0700 on the host, so other host users cannot traverse to it.
+  chmod 600 "$CREDENTIALS_FILE" "$CLIENT_FILE"
+  chmod 644 "$XRAY_DIR/config.json" "$CADDY_FILE"
 }
 
 generate_credentials() {

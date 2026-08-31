@@ -150,7 +150,7 @@ docker compose --env-file .env pull
 - `templates/`：可提交的 Xray 和 Caddy 模板。
 - `site/`：普通静态网站，可自行替换；不要删除健康页面所需文件。
 - `generated/credentials.env`：服务端身份凭据，权限 `0600`。
-- `generated/xray/config.json`：包含 REALITY 私钥，权限 `0600`。
+- `generated/xray/config.json`：包含 REALITY 私钥，权限 `0644`，供官方镜像中的非 root Xray 进程读取；宿主机上的父目录 `generated/` 与 `generated/xray/` 均为 `0700`，其他宿主机用户无法穿过目录读取该文件。
 - `generated/client.txt`：可导入客户端的分享链接，权限 `0600`。
 - `generated/Caddyfile`：渲染后的站点配置，不含 REALITY 密钥。
 

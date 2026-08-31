@@ -57,7 +57,9 @@ file_mode() {
 }
 
 [[ "$(file_mode "$TEST_DIR/generated/credentials.env")" == "600" ]]
-[[ "$(file_mode "$TEST_DIR/generated/xray/config.json")" == "600" ]]
+[[ "$(file_mode "$TEST_DIR/generated")" == "700" ]]
+[[ "$(file_mode "$TEST_DIR/generated/xray")" == "700" ]]
+[[ "$(file_mode "$TEST_DIR/generated/xray/config.json")" == "644" ]]
 [[ "$(file_mode "$TEST_DIR/generated/client.txt")" == "600" ]]
 
 printf '%s\n' 'Smoke tests passed.'
