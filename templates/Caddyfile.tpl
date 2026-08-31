@@ -6,9 +6,16 @@ __ACME_EMAIL_OPTION__
 }
 
 __DOMAIN__ {
-  root * /srv
-  encode zstd gzip
-  file_server
+  handle /api/60s {
+    rewrite * /v2/60s?encoding=json
+    reverse_proxy news-api:4399
+  }
+
+  handle {
+    root * /srv
+    encode zstd gzip
+    file_server
+  }
 
   header {
     -Server
@@ -16,7 +23,8 @@ __DOMAIN__ {
     X-Content-Type-Options "nosniff"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
-    Content-Security-Policy "default-src 'self'; img-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    Content-Security-Policy "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    Permissions-Policy "camera=(), geolocation=(), microphone=()"
   }
 
   log {
@@ -24,4 +32,3 @@ __DOMAIN__ {
     format console
   }
 }
-

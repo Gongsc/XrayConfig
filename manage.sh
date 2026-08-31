@@ -33,9 +33,9 @@ Commands:
   validate          Validate Compose, Caddy and Xray configuration
   up                Validate and start the stack
   down              Stop the stack without deleting certificates
-  restart           Restart both services
+  restart           Restart all services
   status            Show container status
-  logs [service]    Follow logs (service may be caddy or xray)
+  logs [service]    Follow logs (service: caddy, xray or news-api)
   show-client       Print the generated VLESS import link
   backup            Create a private backup archive under backups/
   rotate --yes      Back up and replace UUID, Reality keys and short ID
@@ -59,6 +59,7 @@ load_env() {
   CLIENT_NAME="${CLIENT_NAME:-home-reality}"
   XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.7.11}"
   CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.11.4-alpine}"
+  SIXTY_SECONDS_IMAGE="${SIXTY_SECONDS_IMAGE:-vikiboss/60s:2.54.0}"
   LOG_MAX_SIZE="${LOG_MAX_SIZE:-10m}"
   LOG_MAX_FILE="${LOG_MAX_FILE:-3}"
 
@@ -353,8 +354,8 @@ main() {
     logs)
       load_env
       require_docker
-      if [[ -n "${2:-}" && "${2:-}" != "caddy" && "${2:-}" != "xray" ]]; then
-        die "Service must be 'caddy' or 'xray'."
+      if [[ -n "${2:-}" && "${2:-}" != "caddy" && "${2:-}" != "xray" && "${2:-}" != "news-api" ]]; then
+        die "Service must be 'caddy', 'xray' or 'news-api'."
       fi
       "${COMPOSE[@]}" logs --tail=100 --follow ${2:+"$2"}
       ;;
