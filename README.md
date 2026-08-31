@@ -31,6 +31,51 @@ sudo ufw status
 
 如果域名有 AAAA 记录，它也必须指向这台 VPS；错误的 AAAA 记录通常会导致部分访问失败或 ACME 证书签发失败。
 
+## 初始化新服务器
+
+对于全新的 Ubuntu/Debian VPS，可先运行仓库自带的初始化脚本：
+
+```bash
+sudo ./scripts/bootstrap-server.sh
+```
+
+脚本会：
+
+- 从 Docker 官方 APT 仓库安装 Docker CE、Buildx 与 Compose 插件，不使用发行版的 `docker.io`，也不执行远程 `curl | sh` 脚本。[Docker 官方 Ubuntu 安装说明](https://docs.docker.com/engine/install/ubuntu/) / [Debian 安装说明](https://docs.docker.com/engine/install/debian/)
+- 自动识别当前 SSH 会话或 `sshd -T` 中的端口，先放行 SSH，再启用 UFW。
+- 放行项目必需的公网 TCP 80、443，默认拒绝其他新入站连接，不删除已有 UFW 规则。
+- 安装 Fail2Ban，启用基于 systemd journal 的 `sshd` jail，并通过 UFW 封禁连续失败来源。
+- 将通过 sudo 调用脚本的普通用户加入 `docker` 组；该组具有等同 root 的权限，需要重新登录后生效。
+
+先查看但不修改系统：
+
+```bash
+sudo ./scripts/bootstrap-server.sh --dry-run
+```
+
+若脚本检测到 `docker.io`、发行版 `containerd/runc` 等冲突包，会停止而不是自行删除。确认已备份现有容器状态后才可显式替换：
+
+```bash
+sudo ./scripts/bootstrap-server.sh --replace-distro-docker
+```
+
+替换 Docker 软件包可能重启 Docker daemon，请在维护窗口执行。若完整的官方 Docker CE 套件已经存在，脚本会跳过安装与升级，只校验官方仓库并继续配置安全组件。
+
+自定义 SSH 或额外业务端口：
+
+```bash
+sudo SSH_PORTS="22,2222" EXTRA_TCP_PORTS="8080" EXTRA_UDP_PORTS="51820" \
+  ./scripts/bootstrap-server.sh
+```
+
+如果不希望普通用户获得 Docker 权限：
+
+```bash
+sudo ./scripts/bootstrap-server.sh --no-docker-group
+```
+
+Docker 发布的容器端口可能绕过 UFW 的普通入站规则；本项目的 Compose 文件只发布预期的 80/443。不要在未检查防火墙影响时为其他容器增加端口映射。[Docker 官方防火墙提示](https://docs.docker.com/engine/install/ubuntu/#firewall-limitations)
+
 ## 部署
 
 1. 创建环境文件：

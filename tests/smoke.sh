@@ -21,6 +21,13 @@ sed \
 
 export PATH="$REPO_DIR/tests/fake-bin:$PATH"
 
+bash -n "$REPO_DIR/scripts/bootstrap-server.sh"
+"$REPO_DIR/scripts/bootstrap-server.sh" --help | grep -q 'Docker Engine and Compose'
+grep -q 'https://download.docker.com/linux/' "$REPO_DIR/scripts/bootstrap-server.sh"
+grep -q "ufw allow 80/tcp" "$REPO_DIR/scripts/bootstrap-server.sh"
+grep -q "ufw allow 443/tcp" "$REPO_DIR/scripts/bootstrap-server.sh"
+grep -q '\[sshd\]' "$REPO_DIR/scripts/bootstrap-server.sh"
+
 ruby -e '
   require "yaml"
   compose = YAML.load_file(ARGV.fetch(0))
