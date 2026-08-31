@@ -19,7 +19,7 @@ ACME CA ── HTTP :80 ──────────────────�
 - 不可启用 Cloudflare 橙云或其他 CDN/四层代理，否则 REALITY 客户端无法直连 Xray。
 - 公网 TCP 80、443 未被其他程序占用。
 - 云厂商安全组和系统防火墙允许 TCP 80、443 入站。
-- 客户端需要支持当前 REALITY。所固定的 Xray 版本默认要求 Xray 客户端核心不低于 `26.3.27`；使用 v2rayN、v2rayNG 等客户端时请升级其内置核心。
+- 客户端需要支持 REALITY。为兼容 Clash/Mihomo，服务端将 `minClientVer` 显式放宽为 `1.0.0`；这会绕过 Xray `26.7.11` 默认的 `26.3.27` 最低版本检查。仍建议使用最新客户端核心，因为旧核心的 TLS 指纹可能更容易被识别。
 
 如果启用了 UFW，可执行：
 
@@ -181,7 +181,8 @@ Caddy 容器丢弃全部默认 Linux capabilities 后，只重新加入 `NET_BIN
 - 客户端地址必须填写域名而不是 CDN 地址，端口为 443。
 - SNI 必须与 `.env` 中的 `DOMAIN` 完全一致。
 - 检查链接中的 UUID、`pbk`、`sid`、`flow` 和指纹是否完整。
-- 更新客户端及其 Xray 核心，然后检查 `./manage.sh logs xray`。
+- Clash/Mihomo 节点必须启用 REALITY、`xtls-rprx-vision` 和 Chrome 客户端指纹，并关闭 Mux。
+- 更新客户端核心，然后检查 `./manage.sh logs xray`。
 - 确保客户端系统时间准确；严重的时间偏差会影响 TLS/REALITY。
 
 ### 80 或 443 已被占用

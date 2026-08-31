@@ -42,6 +42,7 @@
             "__DOMAIN__"
           ],
           "privateKey": "__PRIVATE_KEY__",
+          "minClientVer": "1.0.0",
           "maxTimeDiff": 0,
           "shortIds": [
             "__SHORT_ID__"
@@ -70,4 +71,3 @@
     }
   ]
 }
-

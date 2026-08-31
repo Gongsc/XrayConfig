@@ -37,6 +37,7 @@ second_credentials="$(cksum "$TEST_DIR/generated/credentials.env")"
 
 [[ "$first_credentials" == "$second_credentials" ]]
 grep -q '"target": "caddy:8443"' "$TEST_DIR/generated/xray/config.json"
+grep -q '"minClientVer": "1.0.0"' "$TEST_DIR/generated/xray/config.json"
 grep -q '"node.example.com"' "$TEST_DIR/generated/xray/config.json"
 grep -q '^  email ops@example.com$' "$TEST_DIR/generated/Caddyfile"
 grep -q '^node.example.com {' "$TEST_DIR/generated/Caddyfile"
