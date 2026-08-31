@@ -21,6 +21,14 @@ sed \
 
 export PATH="$REPO_DIR/tests/fake-bin:$PATH"
 
+ruby -e '
+  require "yaml"
+  compose = YAML.load_file(ARGV.fetch(0))
+  caddy = compose.fetch("services").fetch("caddy")
+  abort "Caddy must retain NET_BIND_SERVICE" unless caddy.fetch("cap_add") == ["NET_BIND_SERVICE"]
+  abort "Caddy must still drop default capabilities" unless caddy.fetch("cap_drop") == ["ALL"]
+' "$TEST_DIR/compose.yaml"
+
 "$TEST_DIR/manage.sh" init >/dev/null
 
 first_credentials="$(cksum "$TEST_DIR/generated/credentials.env")"

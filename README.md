@@ -158,6 +158,8 @@ docker compose --env-file .env pull
 
 Xray 路由会阻止代理客户端访问 `geoip:private` 覆盖的私网和链路本地地址，减少凭据泄露后访问 VPS 内网服务的风险。配置默认不记录 Xray 访问日志；Caddy 仅把普通网站访问日志输出到容器日志。
 
+Caddy 容器丢弃全部默认 Linux capabilities 后，只重新加入 `NET_BIND_SERVICE`。虽然 Caddy 在容器内监听的是非特权端口 `8080/8443`，官方镜像中的 `/usr/bin/caddy` 自带该文件能力；若从 capability bounding set 中完全删除，Linux 会在执行二进制时返回 `operation not permitted`。该能力不会让容器访问宿主机的其他资源。
+
 ## 故障排查
 
 ### 证书申请失败
@@ -195,4 +197,3 @@ sudo ss -ltnp '( sport = :80 or sport = :443 )'
 - [Xray REALITY 官方配置文档](https://xtls.github.io/en/config/transports/reality.html)
 - [Xray-core 官方容器镜像](https://github.com/XTLS/Xray-core/pkgs/container/xray-core)
 - [Caddy Automatic HTTPS](https://caddyserver.com/docs/automatic-https)
-

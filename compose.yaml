@@ -18,6 +18,11 @@ services:
       - /tmp
     cap_drop:
       - ALL
+    # The official binary carries a cap_net_bind_service file capability.
+    # Keeping it in the bounding set is required even though Caddy listens on
+    # unprivileged container ports 8080/8443; otherwise execve returns EPERM.
+    cap_add:
+      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     healthcheck:
