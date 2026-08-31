@@ -38,6 +38,7 @@ ruby -e '
   abort "Caddy must still drop default capabilities" unless caddy.fetch("cap_drop") == ["ALL"]
   abort "Caddy must remain available when the news API is unhealthy" if caddy.key?("depends_on")
   abort "60s API must not publish host ports" if news_api.key?("ports")
+  abort "60s API must be optional" unless news_api.fetch("profiles") == ["news"]
   abort "60s API image must be configurable and pinned" unless news_api.fetch("image") == "${SIXTY_SECONDS_IMAGE:-vikiboss/60s:2.54.0}"
   compose.fetch("services").each do |name, service|
     logging = service.fetch("logging")
@@ -60,14 +61,25 @@ grep -q '"node.example.com"' "$TEST_DIR/generated/xray/config.json"
 grep -q '^  email ops@example.com$' "$TEST_DIR/generated/Caddyfile"
 grep -q '^node.example.com {' "$TEST_DIR/generated/Caddyfile"
 grep -q '^  handle /api/60s {' "$TEST_DIR/generated/Caddyfile"
+grep -q '^    root \* /srv$' "$TEST_DIR/generated/Caddyfile"
 grep -Fq 'rewrite * /v2/60s?encoding=json' "$TEST_DIR/generated/Caddyfile"
 grep -q '^    reverse_proxy news-api:4399$' "$TEST_DIR/generated/Caddyfile"
 grep -q 'fetch(API_ENDPOINT' "$TEST_DIR/site/app.js"
 grep -q '60 秒读世界' "$TEST_DIR/site/index.html"
+grep -q '一切运行正常' "$TEST_DIR/site/static/index.html"
+! grep -q '<script' "$TEST_DIR/site/static/index.html"
 grep -Eq '^vless://11111111-2222-4333-8444-555555555555@node\.example\.com:443\?.*pbk=BBBB.*sid=[0-9a-f]{16}.*#Smoke%20Test$' \
   "$TEST_DIR/generated/client.txt"
 
 "$TEST_DIR/manage.sh" validate >/dev/null
+ruby -pi -e 'gsub(/^ENABLE_60S=.*/, "ENABLE_60S=false")' "$TEST_DIR/.env"
+"$TEST_DIR/manage.sh" init >/dev/null
+grep -q '^    root \* /srv/static$' "$TEST_DIR/generated/Caddyfile"
+! grep -q 'reverse_proxy news-api:4399' "$TEST_DIR/generated/Caddyfile"
+! grep -Eq '__[A-Z0-9_]+__' "$TEST_DIR/generated/Caddyfile"
+
+"$TEST_DIR/manage.sh" validate >/dev/null
+"$TEST_DIR/manage.sh" up >/dev/null
 "$TEST_DIR/manage.sh" backup >/dev/null
 
 [[ "$(find "$TEST_DIR/backups" -name '*.tar.gz' | wc -l | tr -d ' ')" == "1" ]]

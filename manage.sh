@@ -8,7 +8,8 @@ XRAY_DIR="$GENERATED_DIR/xray"
 CREDENTIALS_FILE="$GENERATED_DIR/credentials.env"
 CLIENT_FILE="$GENERATED_DIR/client.txt"
 CADDY_FILE="$GENERATED_DIR/Caddyfile"
-COMPOSE=(docker compose --project-directory "$ROOT_DIR" --env-file "$ROOT_DIR/.env")
+COMPOSE=()
+COMPOSE_ALL=()
 
 info() {
   printf '[INFO] %s\n' "$*"
@@ -33,7 +34,7 @@ Commands:
   validate          Validate Compose, Caddy and Xray configuration
   up                Validate and start the stack
   down              Stop the stack without deleting certificates
-  restart           Restart all services
+  restart           Restart active services
   status            Show container status
   logs [service]    Follow logs (service: caddy, xray or news-api)
   show-client       Print the generated VLESS import link
@@ -57,6 +58,7 @@ load_env() {
   DOMAIN="${DOMAIN:-}"
   ACME_EMAIL="${ACME_EMAIL:-}"
   CLIENT_NAME="${CLIENT_NAME:-home-reality}"
+  ENABLE_60S="${ENABLE_60S:-true}"
   XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.7.11}"
   CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.11.4-alpine}"
   SIXTY_SECONDS_IMAGE="${SIXTY_SECONDS_IMAGE:-vikiboss/60s:2.54.0}"
@@ -73,10 +75,21 @@ load_env() {
   fi
 
   [[ -n "$CLIENT_NAME" ]] || die "CLIENT_NAME must not be empty."
+  case "${ENABLE_60S,,}" in
+    true|1|yes|on) ENABLE_60S=true ;;
+    false|0|no|off) ENABLE_60S=false ;;
+    *) die "ENABLE_60S must be true or false." ;;
+  esac
   [[ "$LOG_MAX_SIZE" =~ ^[1-9][0-9]*[kKmMgG]$ ]] || \
     die "LOG_MAX_SIZE must be a positive size such as 10m or 1g."
   [[ "$LOG_MAX_FILE" =~ ^[1-9][0-9]*$ ]] || \
     die "LOG_MAX_FILE must be a positive integer."
+
+  COMPOSE=(docker compose --project-directory "$ROOT_DIR" --env-file "$ROOT_DIR/.env")
+  COMPOSE_ALL=(docker compose --project-directory "$ROOT_DIR" --env-file "$ROOT_DIR/.env" --profile news)
+  if [[ "$ENABLE_60S" == "true" ]]; then
+    COMPOSE+=(--profile news)
+  fi
 }
 
 require_docker() {
@@ -168,6 +181,7 @@ load_credentials() {
 render_files() {
   local acme_email_option=""
   local client_label
+  local site_root="/srv/static"
 
   [[ -d "$ROOT_DIR/templates" ]] || die "templates directory is missing."
   mkdir -p "$XRAY_DIR"
@@ -183,10 +197,26 @@ render_files() {
   if [[ -n "$ACME_EMAIL" ]]; then
     acme_email_option="  email $ACME_EMAIL"
   fi
+  if [[ "$ENABLE_60S" == "true" ]]; then
+    site_root="/srv"
+  fi
   sed \
     -e "s|__DOMAIN__|$DOMAIN|g" \
     -e "s|__ACME_EMAIL_OPTION__|$acme_email_option|g" \
-    "$ROOT_DIR/templates/Caddyfile.tpl" >"$CADDY_FILE"
+    -e "s|__SITE_ROOT__|$site_root|g" \
+    "$ROOT_DIR/templates/Caddyfile.tpl" | \
+    awk -v enabled="$ENABLE_60S" '
+      $0 == "__NEWS_ROUTE__" {
+        if (enabled == "true") {
+          print "  handle /api/60s {"
+          print "    rewrite * /v2/60s?encoding=json"
+          print "    reverse_proxy news-api:4399"
+          print "  }"
+        }
+        next
+      }
+      { print }
+    ' >"$CADDY_FILE"
 
   client_label="$(url_encode "$CLIENT_NAME")"
   printf '%s\n' \
@@ -249,6 +279,7 @@ initialize() {
 
   render_files
   info "Configuration rendered under $GENERATED_DIR"
+  info "60s news homepage: $ENABLE_60S"
   info "Run './manage.sh validate' and then './manage.sh up'."
 }
 
@@ -282,15 +313,33 @@ validate_configuration() {
 }
 
 start_stack() {
+  local caddy_was_running=false
+
   load_env
   require_docker
   load_credentials
+  if "${COMPOSE_ALL[@]}" ps --status running --quiet caddy 2>/dev/null | grep -q .; then
+    caddy_was_running=true
+  fi
   check_ports
   check_dns
   validate_configuration
+
+  if [[ "$ENABLE_60S" == "false" ]] && \
+    "${COMPOSE_ALL[@]}" ps --all --quiet news-api 2>/dev/null | grep -q .; then
+    info "Stopping the disabled 60s API service..."
+    "${COMPOSE_ALL[@]}" stop news-api
+    "${COMPOSE_ALL[@]}" rm --force news-api
+  fi
+
   "${COMPOSE[@]}" up -d
+  if [[ "$caddy_was_running" == "true" ]]; then
+    info "Restarting Caddy to load the rendered site configuration..."
+    "${COMPOSE[@]}" restart caddy
+  fi
   "${COMPOSE[@]}" ps
   info "Direct website: https://$DOMAIN"
+  info "60s news homepage: $ENABLE_60S"
   info "Client link: ./manage.sh show-client"
 }
 
@@ -339,7 +388,7 @@ main() {
     down)
       load_env
       require_docker
-      "${COMPOSE[@]}" down
+      "${COMPOSE_ALL[@]}" down
       ;;
     restart)
       load_env
@@ -356,6 +405,9 @@ main() {
       require_docker
       if [[ -n "${2:-}" && "${2:-}" != "caddy" && "${2:-}" != "xray" && "${2:-}" != "news-api" ]]; then
         die "Service must be 'caddy', 'xray' or 'news-api'."
+      fi
+      if [[ "${2:-}" == "news-api" && "$ENABLE_60S" == "false" ]]; then
+        die "news-api is disabled by ENABLE_60S=false."
       fi
       "${COMPOSE[@]}" logs --tail=100 --follow ${2:+"$2"}
       ;;

@@ -38,7 +38,7 @@ fi
 
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
-    --project-directory|--env-file)
+    --project-directory|--env-file|--profile)
       shift 2
       ;;
     *)
@@ -59,4 +59,3 @@ case "${1:-}" in
     exit 1
     ;;
 esac
-

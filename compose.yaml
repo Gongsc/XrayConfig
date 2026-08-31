@@ -3,6 +3,8 @@ name: vless-reality-site
 services:
   news-api:
     image: "${SIXTY_SECONDS_IMAGE:-vikiboss/60s:2.54.0}"
+    profiles:
+      - news
     restart: unless-stopped
     networks:
       - edge

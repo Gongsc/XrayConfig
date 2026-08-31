@@ -1,17 +1,17 @@
 # VLESS + REALITY 与普通 HTTPS 网站共用 443
 
-这个项目在同一台 VPS 上运行 Xray、Caddy 和 60s API 三个容器：
+这个项目默认在同一台 VPS 上运行 Xray、Caddy 和可选的 60s API 三个容器：
 
 ```text
 浏览器 ── HTTPS :443 ──┐                                      ┌─ 静态页面
                        ├─ Xray :8443 ── 未通过 REALITY 验证 ── Caddy :8443
 代理客户端 ─ REALITY ──┘              └─ 验证通过 ──────────── Internet
-                                                               └─ /api/60s ── 60s API :4399
+                                                               └─ /api/60s ── 60s API :4399（可选）
 
 ACME CA ── HTTP :80 ───────────────────────────────────────── Caddy :8080
 ```
 
-公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy，因此访问同一个域名会看到“60 秒读世界”新闻页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。60s API 只接入内部 Docker 网络，不发布宿主机端口。
+公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认显示“60 秒读世界”新闻页；关闭该功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 只接入内部 Docker 网络，不发布宿主机端口。
 
 ## 前提条件
 
@@ -86,7 +86,7 @@ Docker 发布的容器端口可能绕过 UFW 的普通入站规则；本项目�
    nano .env
    ```
 
-   至少将 `DOMAIN` 改成真实域名。`ACME_EMAIL` 可留空；`CLIENT_NAME` 只影响分享链接显示名称。
+   至少将 `DOMAIN` 改成真实域名。`ACME_EMAIL` 可留空；`CLIENT_NAME` 只影响分享链接显示名称。`ENABLE_60S=true` 启用新闻页，改为 `false` 则只提供静态页面。
 
 2. 运行初始化：
 
@@ -95,7 +95,7 @@ Docker 发布的容器端口可能绕过 UFW 的普通入站规则；本项目�
    ./manage.sh init
    ```
 
-   初始化会拉取固定版本的官方 Xray 镜像，并生成 UUID、X25519 密钥和 16 位 short ID。启动时 Compose 还会拉取固定版本的 Caddy 与 60s API 镜像。再次运行 `init` 会保留原凭据，只重新渲染配置。
+   初始化会拉取固定版本的官方 Xray 镜像，并生成 UUID、X25519 密钥和 16 位 short ID。启动时 Compose 会拉取固定版本的 Caddy；仅在启用新闻功能时拉取并启动 60s API。再次运行 `init` 会保留原凭据，只重新渲染配置。
 
 3. 验证并启动：
 
@@ -122,6 +122,26 @@ Docker 发布的容器端口可能绕过 UFW 的普通入站规则；本项目�
    - `pbk`：Xray `x25519` 输出的 Password/PublicKey
    - `sid`：随机 short ID
 
+### 切换新闻页与静态页
+
+编辑 `.env` 中的单一开关：
+
+```dotenv
+# 显示“60 秒读世界”并运行 news-api
+ENABLE_60S=true
+
+# 只显示独立静态页，不运行 news-api
+ENABLE_60S=false
+```
+
+修改后执行：
+
+```bash
+./manage.sh up
+```
+
+`up` 会重新渲染配置并重启 Caddy，使页面切换立即生效。关闭功能时，已有的 `news-api` 容器会被停止并移除；它没有持久化数据卷。不要只运行 `restart`，因为该命令不会重新渲染配置。
+
 ## 验证部署结果
 
 查看容器和日志：
@@ -133,6 +153,8 @@ Docker 发布的容器端口可能绕过 UFW 的普通入站规则；本项目�
 ./manage.sh logs news-api
 ```
 
+`logs news-api` 仅在 `ENABLE_60S=true` 时可用。
+
 从 VPS 之外的网络检查普通网站：
 
 ```bash
@@ -142,8 +164,9 @@ openssl s_client -connect node.example.com:443 -servername node.example.com </de
 
 将示例域名替换为实际域名。验收结果应为：
 
-- 浏览器访问 `https://DOMAIN` 显示“60 秒读世界”，并列出当日简报与每日微语。
-- `https://DOMAIN/api/60s` 返回 JSON；60s API 的 `4399` 端口不应出现在宿主机监听列表中。
+- 启用时，浏览器访问 `https://DOMAIN` 显示“60 秒读世界”，并列出当日简报与每日微语；`https://DOMAIN/api/60s` 返回 JSON。
+- 关闭时，浏览器显示“一切运行正常”的静态页，`/api/60s` 返回 404，`docker compose ps` 中没有 `news-api`。
+- 无论是否启用，60s API 的 `4399` 端口都不应出现在宿主机监听列表中。
 - HTTPS 证书有效，证书域名与 `DOMAIN` 一致。
 - 分享链接可导入客户端，并能通过 VPS 访问 TCP 和 UDP 目标。
 - 通过代理查询公网 IP 时显示 VPS 的出口地址。
@@ -173,7 +196,7 @@ openssl s_client -connect node.example.com:443 -servername node.example.com </de
 
 ### 控制日志大小
 
-Xray、Caddy 和 60s API 均使用 Docker 推荐的 `local` 日志驱动并自动轮转。默认每个服务保留 3 个日志文件、每个最多约 10 MB，轮转文件由 Docker 自动压缩，即每个服务最多约 30 MB 未压缩日志：
+Xray、Caddy 和启用时的 60s API 均使用 Docker 推荐的 `local` 日志驱动并自动轮转。默认每个服务保留 3 个日志文件、每个最多约 10 MB，轮转文件由 Docker 自动压缩，即每个服务最多约 30 MB 未压缩日志：
 
 ```dotenv
 LOG_MAX_SIZE=10m
@@ -195,6 +218,8 @@ docker compose --env-file .env up -d --force-recreate
 ./manage.sh logs xray
 ./manage.sh logs news-api
 ```
+
+关闭新闻功能后没有 `news-api` 容器，此时无需查看该项日志。
 
 Docker `local` 驱动的轮转参数参见[官方文档](https://docs.docker.com/engine/logging/drivers/local/)。
 
@@ -223,7 +248,8 @@ docker compose --env-file .env pull
 ## 文件与安全说明
 
 - `templates/`：可提交的 Xray 和 Caddy 模板。
-- `site/`：“60 秒读世界”静态前端；浏览器只请求同源 `/api/60s` 的 JSON 数据，成功结果会缓存到浏览器本地，接口暂时不可用时显示上次结果。
+- `site/`：“60 秒读世界”前端；浏览器只请求同源 `/api/60s` 的 JSON 数据，成功结果会缓存到浏览器本地，接口暂时不可用时显示上次结果。
+- `site/static/`：关闭 60s 功能时使用的独立静态页，不加载 JavaScript，也不请求任何 API。
 - `generated/credentials.env`：服务端身份凭据，权限 `0600`。
 - `generated/xray/config.json`：包含 REALITY 私钥，权限 `0644`，供官方镜像中的非 root Xray 进程读取；宿主机上的父目录 `generated/` 与 `generated/xray/` 均为 `0700`，其他宿主机用户无法穿过目录读取该文件。
 - `generated/client.txt`：可导入客户端的分享链接，权限 `0600`。
@@ -253,6 +279,7 @@ Caddy 容器丢弃全部默认 Linux capabilities 后，只重新加入 `NET_BIN
 
 ### 页面显示“新闻服务暂时不可用”
 
+- 先确认 `.env` 中 `ENABLE_60S=true`；若希望只使用静态页，将其改为 `false` 后运行 `./manage.sh up`。
 - 查看接口容器状态与日志：`./manage.sh status`、`./manage.sh logs news-api`。
 - 在服务器执行 `curl -fsS http://127.0.0.1/` 检查 Caddy 的 HTTP 入口，或从外部执行 `curl -fsS https://DOMAIN/api/60s` 检查完整链路。
 - 60s API 需要从互联网获取日更数据；确认 VPS 的 DNS 与出站 HTTPS 正常。

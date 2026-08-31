@@ -1,0 +1,73 @@
+:root {
+  color-scheme: light;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f3f1eb;
+  color: #23221f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 5vw, 3rem);
+  background:
+    radial-gradient(circle at 12% 10%, rgb(145 159 133 / 22%), transparent 28rem),
+    radial-gradient(circle at 88% 85%, rgb(189 171 137 / 20%), transparent 26rem),
+    #f3f1eb;
+}
+
+.card {
+  width: min(42rem, 100%);
+  padding: clamp(2rem, 8vw, 5rem);
+  border: 1px solid #c9c3b7;
+  background: rgb(250 249 245 / 90%);
+  box-shadow: 0 1.5rem 4rem rgb(55 50 42 / 10%);
+}
+
+.eyebrow {
+  margin: 0 0 1rem;
+  color: #516147;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+}
+
+h1 {
+  margin: 0;
+  font-family: "Songti SC", "Noto Serif CJK SC", "STSong", Georgia, serif;
+  font-size: clamp(2.4rem, 9vw, 5rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.lede {
+  max-width: 30rem;
+  margin: 1.5rem 0 0;
+  color: #57534c;
+  font-size: clamp(1rem, 2.5vw, 1.15rem);
+  line-height: 1.8;
+}
+
+.rule {
+  width: 4rem;
+  height: 2px;
+  margin: 2.5rem 0 1.25rem;
+  background: #66765b;
+}
+
+.footnote {
+  margin: 0;
+  color: #6c675f;
+  font-size: 0.9rem;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .card {
+    background: #faf9f5;
+  }
+}

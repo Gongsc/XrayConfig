@@ -6,13 +6,10 @@ __ACME_EMAIL_OPTION__
 }
 
 __DOMAIN__ {
-  handle /api/60s {
-    rewrite * /v2/60s?encoding=json
-    reverse_proxy news-api:4399
-  }
+__NEWS_ROUTE__
 
   handle {
-    root * /srv
+    root * __SITE_ROOT__
     encode zstd gzip
     file_server
   }
