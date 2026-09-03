@@ -46,6 +46,7 @@ sudo ./scripts/bootstrap-server.sh
 - 自动识别当前 SSH 会话或 `sshd -T` 中的端口，先放行 SSH，再启用 UFW。
 - 放行项目必需的公网 TCP 80、443，默认拒绝其他新入站连接，不删除已有 UFW 规则。
 - 安装 Fail2Ban，启用基于 systemd journal 的 `sshd` jail，并通过 UFW 封禁连续失败来源。
+- 加载内核的 `tcp_bbr` 模块，将默认队列调度设为 `fq`，立即启用 BBR，并写入专用的 modules-load/sysctl 配置以便重启后继续生效。
 - 将通过 sudo 调用脚本的普通用户加入 `docker` 组；该组具有等同 root 的权限，需要重新登录后生效。
 
 先查看但不修改系统：
@@ -76,6 +77,16 @@ sudo ./scripts/bootstrap-server.sh --no-docker-group
 ```
 
 Docker 发布的容器端口可能绕过 UFW 的普通入站规则；本项目的 Compose 文件只发布预期的 80/443。不要在未检查防火墙影响时为其他容器增加端口映射。[Docker 官方防火墙提示](https://docs.docker.com/engine/install/ubuntu/#firewall-limitations)
+
+检查 BBR 状态：
+
+```bash
+sysctl net.ipv4.tcp_congestion_control
+sysctl net.core.default_qdisc
+sysctl net.ipv4.tcp_available_congestion_control
+```
+
+预期当前算法为 `bbr`、默认队列为 `fq`，可用算法列表中包含 `bbr`。如果 VPS 使用不允许加载模块或修改 sysctl 的受限虚拟化内核，初始化脚本会明确报错并停止。
 
 ## 部署
 

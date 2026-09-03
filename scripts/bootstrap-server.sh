@@ -28,6 +28,7 @@ Installs and configures:
   - Docker Engine and Compose from Docker's official APT repository
   - UFW with SSH, TCP 80 and TCP 443 allowed
   - Fail2Ban with an SSH jail and UFW ban actions
+  - TCP BBR congestion control with the fq queueing discipline
 
 Options:
   --replace-distro-docker  Remove conflicting distro Docker/containerd packages
@@ -92,6 +93,44 @@ install_text_file() {
   fi
   install -D -m "$mode" "$temp_file" "$target"
   rm -f -- "$temp_file"
+}
+
+configure_bbr() {
+  local available active qdisc
+  local module_config="tcp_bbr"
+  local sysctl_config="# Managed by vless-reality bootstrap-server.sh
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    run modprobe tcp_bbr
+    install_text_file 0644 /etc/modules-load.d/vless-reality-bbr.conf "$module_config"
+    install_text_file 0644 /etc/sysctl.d/99-vless-reality-bbr.conf "$sysctl_config"
+    run sysctl --load /etc/sysctl.d/99-vless-reality-bbr.conf
+    info "Would verify that BBR is available and active with fq."
+    return
+  fi
+
+  if ! modprobe tcp_bbr; then
+    available="$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true)"
+    [[ " $available " == *" bbr "* ]] || \
+      die "This kernel does not provide TCP BBR. Install a supported host kernel before retrying."
+    warn "modprobe tcp_bbr failed, but BBR is built into the running kernel; continuing."
+  fi
+
+  available="$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true)"
+  [[ " $available " == *" bbr "* ]] || \
+    die "TCP BBR is not listed by the running kernel: ${available:-none}."
+
+  install_text_file 0644 /etc/modules-load.d/vless-reality-bbr.conf "$module_config"
+  install_text_file 0644 /etc/sysctl.d/99-vless-reality-bbr.conf "$sysctl_config"
+  run sysctl --load /etc/sysctl.d/99-vless-reality-bbr.conf
+
+  active="$(sysctl -n net.ipv4.tcp_congestion_control)"
+  qdisc="$(sysctl -n net.core.default_qdisc)"
+  [[ "$active" == "bbr" ]] || die "BBR configuration did not become active (current: $active)."
+  [[ "$qdisc" == "fq" ]] || die "fq did not become the default queueing discipline (current: $qdisc)."
+  info "TCP BBR is enabled and active with the fq queueing discipline."
 }
 
 package_is_installed() {
@@ -213,7 +252,7 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 run apt-get update
-run apt-get install -y ca-certificates curl ufw fail2ban python3-systemd
+run apt-get install -y ca-certificates curl ufw fail2ban kmod procps python3-systemd
 
 if [[ "$DRY_RUN" != true && ! -f /etc/fail2ban/action.d/ufw.conf ]]; then
   die "The installed Fail2Ban package does not provide action.d/ufw.conf. No firewall rules have been changed."
@@ -269,6 +308,8 @@ if [[ "$ADD_DOCKER_GROUP" == true ]]; then
   fi
 fi
 
+configure_bbr
+
 run ufw default deny incoming
 run ufw default allow outgoing
 for port in "${SSH_PORT_LIST[@]}"; do
@@ -310,6 +351,7 @@ if [[ "$DRY_RUN" != true ]]; then
   docker compose version >/dev/null
   systemctl is-active --quiet docker || die "Docker did not become active."
   systemctl is-active --quiet fail2ban || die "Fail2Ban did not become active."
+  [[ "$(sysctl -n net.ipv4.tcp_congestion_control)" == "bbr" ]] || die "BBR is no longer active."
   ufw status verbose
   fail2ban-client status sshd
 fi

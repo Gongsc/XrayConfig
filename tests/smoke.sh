@@ -28,6 +28,10 @@ grep -q 'https://download.docker.com/linux/' "$REPO_DIR/scripts/bootstrap-server
 grep -q "ufw allow 80/tcp" "$REPO_DIR/scripts/bootstrap-server.sh"
 grep -q "ufw allow 443/tcp" "$REPO_DIR/scripts/bootstrap-server.sh"
 grep -q '\[sshd\]' "$REPO_DIR/scripts/bootstrap-server.sh"
+grep -q 'modprobe tcp_bbr' "$REPO_DIR/scripts/bootstrap-server.sh"
+grep -q '^net.core.default_qdisc = fq$' "$REPO_DIR/scripts/bootstrap-server.sh"
+grep -q '^net.ipv4.tcp_congestion_control = bbr' "$REPO_DIR/scripts/bootstrap-server.sh"
+grep -q 'tcp_available_congestion_control' "$REPO_DIR/scripts/bootstrap-server.sh"
 
 ruby -e '
   require "yaml"
