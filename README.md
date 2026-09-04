@@ -13,11 +13,13 @@ ACME CA ── HTTP :80 ──────────────────�
 
 公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认显示“60 秒读世界”新闻页；关闭该功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 只接入内部 Docker 网络，不发布宿主机端口。
 
+可选中转只作用于生成的客户端入口：客户端先连接中转机，中转机把原始 TCP 流量转发到节点 `443`，REALITY 的 SNI 和服务端域名仍使用 `DOMAIN`。
+
 ## 前提条件
 
 - Ubuntu 或 Debian VPS，已安装 Docker Engine 和 Docker Compose v2。
 - 一个 DNS-only 域名，例如 `node.example.com`，A/AAAA 记录直接指向该 VPS。
-- 不可启用 Cloudflare 橙云或其他 CDN/四层代理，否则 REALITY 客户端无法直连 Xray。
+- 不可使用会终止 TLS、修改流量或发送 PROXY protocol 的 CDN/代理。可使用透明的四层 TCP 中转，但它必须原样转发到节点 `443/TCP`。
 - 公网 TCP 80、443 未被其他程序占用。
 - 云厂商安全组和系统防火墙允许 TCP 80、443 入站。
 - 客户端需要支持 REALITY。为兼容 Clash/Mihomo，服务端将 `minClientVer` 显式放宽为 `1.0.0`；这会绕过 Xray `26.7.11` 默认的 `26.3.27` 最低版本检查。仍建议使用最新客户端核心，因为旧核心的 TLS 指纹可能更容易被识别。
@@ -97,7 +99,7 @@ sysctl net.ipv4.tcp_available_congestion_control
    nano .env
    ```
 
-   至少将 `DOMAIN` 改成真实域名。`ACME_EMAIL` 可留空；`CLIENT_NAME` 只影响分享链接显示名称。`ENABLE_60S=true` 启用新闻页，改为 `false` 则只提供静态页面。
+   至少将 `DOMAIN` 改成真实域名。`ACME_EMAIL` 可留空；`CLIENT_NAME` 只影响分享链接显示名称。需要中转时填写 `RELAY_ADDRESS` 和 `RELAY_PORT`，否则保持地址为空。`ENABLE_60S=true` 启用新闻页，改为 `false` 则只提供静态页面。
 
 2. 运行初始化：
 
@@ -123,8 +125,8 @@ sysctl net.ipv4.tcp_available_congestion_control
 
    链接包含以下参数：
 
-   - 地址：环境文件中的域名
-   - 端口：`443`
+   - 地址：配置中转时为 `RELAY_ADDRESS`，否则为 `DOMAIN`
+   - 端口：配置中转时为 `RELAY_PORT`，否则为 `443`
    - 传输：TCP
    - Flow：`xtls-rprx-vision`
    - 安全：REALITY
@@ -132,6 +134,51 @@ sysctl net.ipv4.tcp_available_congestion_control
    - 指纹：Chrome
    - `pbk`：Xray `x25519` 输出的 Password/PublicKey
    - `sid`：随机 short ID
+
+### 配置中转机器
+
+中转入口支持域名、IPv4 和 IPv6。示例：
+
+```dotenv
+DOMAIN=node.example.com
+RELAY_ADDRESS=relay.example.net
+RELAY_PORT=443
+```
+
+也可以直接填写 IP；IPv6 可以带或不带方括号，生成链接时会自动使用标准的 `[IPv6]:端口` 格式：
+
+```dotenv
+RELAY_ADDRESS=2001:db8::20
+RELAY_PORT=8443
+```
+
+IPv6 字面量校验需要 `python3`；项目的服务器初始化脚本会安装该依赖。使用域名或 IPv4 中转时不需要它。
+
+修改后重新生成并查看客户端链接：
+
+```bash
+./manage.sh init
+./manage.sh show-client
+```
+
+生成结果的连接地址会自动替换为中转机，但查询参数中的 `sni=node.example.com` 保持不变。清空 `RELAY_ADDRESS` 后再次执行 `init`，链接会恢复为直连 `DOMAIN:443`。
+
+中转机需要满足以下条件：
+
+- 在 `RELAY_PORT/TCP` 上监听，并把连接原样转发到源节点 `443/TCP`。
+- 使用纯四层 TCP 转发，不能终止 TLS、注入 PROXY protocol、改写 SNI 或经过 CDN HTTP 代理。
+- 放行对应的云防火墙和本机防火墙入站端口。
+- UDP 代理数据封装在 VLESS 的 TCP 入站连接中，因此中转入口只需转发 TCP。
+
+本项目只生成使用中转入口的客户端配置，不会远程登录或自动修改中转服务器。`DOMAIN` 默认仍应直接解析到源节点，以保证 Caddy 的 ACME 验证和普通网站访问；如果让它解析到中转机，还必须同时正确转发 TCP 80 和 443。
+
+从外部网络验证中转链路：
+
+```bash
+openssl s_client -connect relay.example.net:443 -servername node.example.com </dev/null
+```
+
+返回的公网证书应属于 `DOMAIN`。这只能验证普通 TLS 回落链路，REALITY 仍需使用生成的链接在客户端中实际连接验证。
 
 ### 切换新闻页与静态页
 
@@ -298,7 +345,8 @@ Caddy 容器丢弃全部默认 Linux capabilities 后，只重新加入 `NET_BIN
 
 ### 网站可用但代理无法连接
 
-- 客户端地址必须填写域名而不是 CDN 地址，端口为 443。
+- 未配置中转时，客户端地址必须为 `DOMAIN:443`；配置中转时必须与 `RELAY_ADDRESS:RELAY_PORT` 一致。
+- 使用中转时，先确认中转机确实把原始 TCP 流量转发到源节点 `443`，且没有发送 PROXY protocol 或终止 TLS。
 - SNI 必须与 `.env` 中的 `DOMAIN` 完全一致。
 - 检查链接中的 UUID、`pbk`、`sid`、`flow` 和指纹是否完整。
 - Clash/Mihomo 节点必须启用 REALITY、`xtls-rprx-vision` 和 Chrome 客户端指纹，并关闭 Mux。

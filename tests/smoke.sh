@@ -17,6 +17,8 @@ sed \
   -e 's/^DOMAIN=.*/DOMAIN=node.example.com/' \
   -e 's/^ACME_EMAIL=.*/ACME_EMAIL=ops@example.com/' \
   -e 's/^CLIENT_NAME=.*/CLIENT_NAME="Smoke Test"/' \
+  -e 's/^RELAY_ADDRESS=.*/RELAY_ADDRESS=relay.example.net/' \
+  -e 's/^RELAY_PORT=.*/RELAY_PORT=8443/' \
   "$TEST_DIR/.env.example" >"$TEST_DIR/.env"
 
 export PATH="$REPO_DIR/tests/fake-bin:$PATH"
@@ -72,19 +74,40 @@ grep -q 'fetch(API_ENDPOINT' "$TEST_DIR/site/app.js"
 grep -q '60 秒读世界' "$TEST_DIR/site/index.html"
 grep -q '一切运行正常' "$TEST_DIR/site/static/index.html"
 ! grep -q '<script' "$TEST_DIR/site/static/index.html"
-grep -Eq '^vless://11111111-2222-4333-8444-555555555555@node\.example\.com:443\?.*pbk=BBBB.*sid=[0-9a-f]{16}.*#Smoke%20Test$' \
+grep -Eq '^vless://11111111-2222-4333-8444-555555555555@relay\.example\.net:8443\?.*sni=node\.example\.com.*pbk=BBBB.*sid=[0-9a-f]{16}.*#Smoke%20Test$' \
   "$TEST_DIR/generated/client.txt"
 
 "$TEST_DIR/manage.sh" validate >/dev/null
-ruby -pi -e 'gsub(/^ENABLE_60S=.*/, "ENABLE_60S=false")' "$TEST_DIR/.env"
+ruby -pi -e '
+  gsub(/^RELAY_ADDRESS=.*/, "RELAY_ADDRESS=[2001:db8::5]")
+  gsub(/^RELAY_PORT=.*/, "RELAY_PORT=2443")
+' "$TEST_DIR/.env"
+"$TEST_DIR/manage.sh" init >/dev/null
+grep -Eq '^vless://11111111-2222-4333-8444-555555555555@\[2001:db8::5\]:2443\?.*sni=node\.example\.com' \
+  "$TEST_DIR/generated/client.txt"
+
+ruby -pi -e '
+  gsub(/^RELAY_ADDRESS=.*/, "RELAY_ADDRESS=")
+  gsub(/^RELAY_PORT=.*/, "RELAY_PORT=443")
+  gsub(/^ENABLE_60S=.*/, "ENABLE_60S=false")
+' "$TEST_DIR/.env"
 "$TEST_DIR/manage.sh" init >/dev/null
 grep -q '^    root \* /srv/static$' "$TEST_DIR/generated/Caddyfile"
 ! grep -q 'reverse_proxy news-api:4399' "$TEST_DIR/generated/Caddyfile"
 ! grep -Eq '__[A-Z0-9_]+__' "$TEST_DIR/generated/Caddyfile"
+grep -Eq '^vless://11111111-2222-4333-8444-555555555555@node\.example\.com:443\?.*sni=node\.example\.com' \
+  "$TEST_DIR/generated/client.txt"
 
 "$TEST_DIR/manage.sh" validate >/dev/null
 "$TEST_DIR/manage.sh" up >/dev/null
 "$TEST_DIR/manage.sh" backup >/dev/null
+
+ruby -pi -e 'gsub(/^RELAY_ADDRESS=.*/, "RELAY_ADDRESS=https://relay.example.net")' "$TEST_DIR/.env"
+if "$TEST_DIR/manage.sh" init >"$TEST_DIR/invalid-relay.log" 2>&1; then
+  printf '%s\n' 'Invalid relay address was unexpectedly accepted.' >&2
+  exit 1
+fi
+grep -q 'RELAY_ADDRESS must be a hostname' "$TEST_DIR/invalid-relay.log"
 
 [[ "$(find "$TEST_DIR/backups" -name '*.tar.gz' | wc -l | tr -d ' ')" == "1" ]]
 

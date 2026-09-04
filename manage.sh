@@ -47,6 +47,27 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
 }
 
+is_valid_ipv4() {
+  local address="$1"
+  local octet
+  local -a octets=()
+
+  IFS=. read -r -a octets <<<"$address"
+  ((${#octets[@]} == 4)) || return 1
+  for octet in "${octets[@]}"; do
+    [[ "$octet" =~ ^[0-9]{1,3}$ ]] || return 1
+    ((10#$octet <= 255)) || return 1
+  done
+}
+
+is_valid_ipv6() {
+  local address="$1"
+
+  command -v python3 >/dev/null 2>&1 || \
+    die "Python 3 is required to validate an IPv6 RELAY_ADDRESS; use a relay hostname instead."
+  python3 -c 'import ipaddress, sys; ipaddress.IPv6Address(sys.argv[1])' "$address" >/dev/null 2>&1
+}
+
 load_env() {
   [[ -f "$ROOT_DIR/.env" ]] || die "Missing .env. Run: cp .env.example .env"
 
@@ -58,6 +79,8 @@ load_env() {
   DOMAIN="${DOMAIN:-}"
   ACME_EMAIL="${ACME_EMAIL:-}"
   CLIENT_NAME="${CLIENT_NAME:-home-reality}"
+  RELAY_ADDRESS="${RELAY_ADDRESS:-}"
+  RELAY_PORT="${RELAY_PORT:-443}"
   ENABLE_60S="${ENABLE_60S:-true}"
   XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.7.11}"
   CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.11.4-alpine}"
@@ -75,6 +98,30 @@ load_env() {
   fi
 
   [[ -n "$CLIENT_NAME" ]] || die "CLIENT_NAME must not be empty."
+  if [[ "$RELAY_ADDRESS" =~ ^\[(.*)\]$ ]]; then
+    RELAY_ADDRESS="${BASH_REMATCH[1]}"
+  elif [[ "$RELAY_ADDRESS" == *"["* || "$RELAY_ADDRESS" == *"]"* ]]; then
+    die "RELAY_ADDRESS has invalid brackets. Use a hostname, IPv4 address or IPv6 literal."
+  fi
+  if [[ "$RELAY_ADDRESS" == *"/"* || "$RELAY_ADDRESS" == *"@"* || \
+    "$RELAY_ADDRESS" == *"?"* || "$RELAY_ADDRESS" == *"#"* || "$RELAY_ADDRESS" == *"%"* ]]; then
+    die "RELAY_ADDRESS must be a hostname, IPv4 address or IPv6 literal without a scheme or port."
+  fi
+  if [[ -n "$RELAY_ADDRESS" ]]; then
+    if [[ "$RELAY_ADDRESS" == *":"* ]]; then
+      is_valid_ipv6 "$RELAY_ADDRESS" || die "RELAY_ADDRESS is not a valid IPv6 literal."
+      RELAY_ADDRESS="$(printf '%s' "$RELAY_ADDRESS" | tr '[:upper:]' '[:lower:]')"
+    elif is_valid_ipv4 "$RELAY_ADDRESS"; then
+      :
+    elif [[ "$RELAY_ADDRESS" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]]; then
+      RELAY_ADDRESS="$(printf '%s' "$RELAY_ADDRESS" | tr '[:upper:]' '[:lower:]')"
+    else
+      die "RELAY_ADDRESS must be a hostname, IPv4 address or IPv6 literal without a scheme or port."
+    fi
+  fi
+  [[ "$RELAY_PORT" =~ ^[0-9]+$ ]] || die "RELAY_PORT must be an integer from 1 to 65535."
+  RELAY_PORT="$((10#$RELAY_PORT))"
+  ((RELAY_PORT >= 1 && RELAY_PORT <= 65535)) || die "RELAY_PORT must be an integer from 1 to 65535."
   case "${ENABLE_60S,,}" in
     true|1|yes|on) ENABLE_60S=true ;;
     false|0|no|off) ENABLE_60S=false ;;
@@ -180,7 +227,9 @@ load_credentials() {
 
 render_files() {
   local acme_email_option=""
+  local client_address="$DOMAIN"
   local client_label
+  local client_port=443
   local site_root="/srv/static"
 
   [[ -d "$ROOT_DIR/templates" ]] || die "templates directory is missing."
@@ -219,8 +268,15 @@ render_files() {
     ' >"$CADDY_FILE"
 
   client_label="$(url_encode "$CLIENT_NAME")"
+  if [[ -n "$RELAY_ADDRESS" ]]; then
+    client_address="$RELAY_ADDRESS"
+    client_port="$RELAY_PORT"
+    if [[ "$client_address" == *":"* ]]; then
+      client_address="[$client_address]"
+    fi
+  fi
   printf '%s\n' \
-    "vless://${UUID}@${DOMAIN}:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${DOMAIN}&fp=chrome&pbk=${REALITY_PASSWORD}&sid=${SHORT_ID}&type=tcp#${client_label}" \
+    "vless://${UUID}@${client_address}:${client_port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${DOMAIN}&fp=chrome&pbk=${REALITY_PASSWORD}&sid=${SHORT_ID}&type=tcp#${client_label}" \
     >"$CLIENT_FILE"
 
   # The official Xray image runs as a non-root user. The rendered config must
@@ -279,6 +335,11 @@ initialize() {
 
   render_files
   info "Configuration rendered under $GENERATED_DIR"
+  if [[ -n "$RELAY_ADDRESS" ]]; then
+    info "Client relay endpoint: $RELAY_ADDRESS:$RELAY_PORT (SNI remains $DOMAIN)"
+  else
+    info "Client relay endpoint: disabled (direct to $DOMAIN:443)"
+  fi
   info "60s news homepage: $ENABLE_60S"
   info "Run './manage.sh validate' and then './manage.sh up'."
 }
@@ -339,6 +400,11 @@ start_stack() {
   fi
   "${COMPOSE[@]}" ps
   info "Direct website: https://$DOMAIN"
+  if [[ -n "$RELAY_ADDRESS" ]]; then
+    info "Client relay endpoint: $RELAY_ADDRESS:$RELAY_PORT (SNI remains $DOMAIN)"
+  else
+    info "Client relay endpoint: disabled (direct to $DOMAIN:443)"
+  fi
   info "60s news homepage: $ENABLE_60S"
   info "Client link: ./manage.sh show-client"
 }
