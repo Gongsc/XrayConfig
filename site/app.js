@@ -169,7 +169,9 @@
   "use strict";
 
   const NETWORK_ENDPOINT = "/api/network-check";
-  const REQUEST_TIMEOUT_MS = 12_000;
+  const REQUEST_TIMEOUT_MS = 50_000;
+  const EXPECTED_TARGETS = 22;
+  const EXPECTED_SAMPLES = 5;
   const VALID_VIEWS = new Set(["briefing", "network"]);
 
   const elements = {
@@ -177,7 +179,7 @@
     views: [...document.querySelectorAll("[data-view]")],
     refresh: document.querySelector("#network-refresh"),
     status: document.querySelector("#network-status"),
-    grid: document.querySelector("#latency-grid"),
+    groups: document.querySelector("#latency-groups"),
     average: document.querySelector("#average-latency"),
     grade: document.querySelector("#network-grade-label"),
     online: document.querySelector("#online-count"),
@@ -219,21 +221,30 @@
       throw new Error("响应格式无效");
     }
 
-    const results = payload.results.slice(0, 10).map((item) => {
+    const results = payload.results.slice(0, 40).map((item) => {
       if (!item || typeof item !== "object") throw new Error("检测项目无效");
       const latency = Number(item.latencyMs);
       return {
         id: cleanText(item.id, 32),
         name: cleanText(item.name, 40) || "未知站点",
         host: cleanText(item.host, 100),
+        regionCode: cleanText(item.regionCode, 8),
+        regionName: cleanText(item.regionName, 40) || "其他地区",
+        category: cleanText(item.category, 40) || "网站",
         reachable: item.reachable === true,
         latencyMs: Number.isFinite(latency) && latency >= 0 ? Math.round(latency) : 0,
+        attempts: Math.max(1, Math.min(10, Number(item.attempts) || EXPECTED_SAMPLES)),
+        successes: Math.max(0, Math.min(10, Number(item.successes) || 0)),
         error: cleanText(item.error, 60),
       };
     });
 
     if (results.length === 0) throw new Error("没有检测结果");
-    return { checkedAt: cleanText(payload.checkedAt, 40), results };
+    return {
+      checkedAt: cleanText(payload.checkedAt, 40),
+      sampleCount: Math.max(1, Math.min(10, Number(payload.sampleCount) || EXPECTED_SAMPLES)),
+      results,
+    };
   }
 
   function latencyTone(latency) {
@@ -243,61 +254,88 @@
   }
 
   function setLoading(isLoading) {
-    elements.grid.setAttribute("aria-busy", String(isLoading));
+    elements.groups.setAttribute("aria-busy", String(isLoading));
     elements.refresh.disabled = isLoading;
     elements.refresh.classList.toggle("is-spinning", isLoading);
   }
 
   function renderLoading() {
-    const item = document.createElement("li");
+    const item = document.createElement("p");
     item.className = "latency-placeholder is-loading";
-    item.textContent = "服务器正在连接各站点…";
-    elements.grid.replaceChildren(item);
-    elements.status.textContent = "正在检测 6 个站点，最慢可能需要 8 秒";
+    item.textContent = "服务器正在进行 5 轮检测…";
+    elements.groups.replaceChildren(item);
+    elements.status.textContent = `正在检测 ${EXPECTED_TARGETS} 个站点，每站 ${EXPECTED_SAMPLES} 次，最长约 40 秒`;
     delete elements.status.dataset.tone;
   }
 
   function renderResults(data) {
     const reachable = data.results.filter((item) => item.reachable);
     const fragment = document.createDocumentFragment();
-
+    const regions = new Map();
     data.results.forEach((result) => {
-      const card = document.createElement("li");
-      card.className = "latency-card";
-
-      const name = document.createElement("h3");
-      name.className = "latency-name";
-      name.textContent = result.name;
-
-      const host = document.createElement("span");
-      host.className = "latency-host";
-      host.textContent = result.host;
-
-      const value = document.createElement("span");
-      value.className = "latency-value";
-
-      const state = document.createElement("span");
-      state.className = "latency-state";
-
-      if (result.reachable) {
-        const [tone, label] = latencyTone(result.latencyMs);
-        card.dataset.tone = tone;
-        value.append(String(result.latencyMs));
-        const unit = document.createElement("small");
-        unit.textContent = "ms";
-        value.append(unit);
-        state.textContent = label;
-      } else {
-        card.dataset.tone = "error";
-        value.textContent = "不可达";
-        state.textContent = result.error || "连接失败";
+      if (!regions.has(result.regionCode)) {
+        regions.set(result.regionCode, { name: result.regionName, results: [] });
       }
-
-      card.append(name, host, value, state);
-      fragment.append(card);
+      regions.get(result.regionCode).results.push(result);
     });
 
-    elements.grid.replaceChildren(fragment);
+    regions.forEach((region) => {
+      const section = document.createElement("section");
+      section.className = "region-group";
+
+      const heading = document.createElement("div");
+      heading.className = "region-heading";
+      const title = document.createElement("h3");
+      title.textContent = region.name;
+      const regionStatus = document.createElement("span");
+      const regionOnline = region.results.filter((item) => item.reachable).length;
+      regionStatus.textContent = `${regionOnline} / ${region.results.length} 可连接`;
+      heading.append(title, regionStatus);
+
+      const list = document.createElement("ul");
+      list.className = "latency-grid";
+
+      region.results.forEach((result) => {
+        const card = document.createElement("li");
+        card.className = "latency-card";
+
+        const name = document.createElement("h4");
+        name.className = "latency-name";
+        name.textContent = result.name;
+
+        const host = document.createElement("span");
+        host.className = "latency-host";
+        host.textContent = `${result.category} · ${result.host}`;
+
+        const value = document.createElement("span");
+        value.className = "latency-value";
+
+        const state = document.createElement("span");
+        state.className = "latency-state";
+
+        if (result.reachable) {
+          const [tone, label] = latencyTone(result.latencyMs);
+          card.dataset.tone = tone;
+          value.append(String(result.latencyMs));
+          const unit = document.createElement("small");
+          unit.textContent = "ms";
+          value.append(unit);
+          state.textContent = `${label} · ${result.successes}/${result.attempts} 次成功`;
+        } else {
+          card.dataset.tone = "error";
+          value.textContent = "不可达";
+          state.textContent = `${result.error || "连接失败"} · 0/${result.attempts} 次成功`;
+        }
+
+        card.append(name, host, value, state);
+        list.append(card);
+      });
+
+      section.append(heading, list);
+      fragment.append(section);
+    });
+
+    elements.groups.replaceChildren(fragment);
     elements.online.textContent = `${reachable.length} / ${data.results.length}`;
 
     if (reachable.length > 0) {
@@ -329,17 +367,17 @@
 
     const failed = data.results.length - reachable.length;
     elements.status.textContent = failed === 0
-      ? "检测完成，所有站点均可连接"
-      : `检测完成，${failed} 个站点暂时不可达`;
+      ? `检测完成：${data.results.length} 个站点均已完成 ${data.sampleCount} 次采样`
+      : `检测完成：${failed} 个站点在 ${data.sampleCount} 次采样中均不可达`;
     if (failed > 0) elements.status.dataset.tone = "warning";
     else delete elements.status.dataset.tone;
   }
 
   function renderUnavailable() {
-    const item = document.createElement("li");
+    const item = document.createElement("p");
     item.className = "latency-placeholder";
     item.textContent = "网络检测服务暂时不可用，请稍后重试。";
-    elements.grid.replaceChildren(item);
+    elements.groups.replaceChildren(item);
     elements.status.textContent = "未能取得检测结果";
     elements.status.dataset.tone = "warning";
     elements.average.textContent = "—";

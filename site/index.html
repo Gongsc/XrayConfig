@@ -84,7 +84,7 @@
           <div>
             <p class="kicker">SERVER NETWORK CHECK</p>
             <h1 id="network-title">这台服务器，到世界有多远？</h1>
-            <p class="summary">由当前服务器连接六个常用站点，查看真实的 HTTPS 响应延迟与可用状态。</p>
+            <p class="summary">按国家与地区检测 22 个常用站点，覆盖门户、新闻、流媒体和社交平台。</p>
           </div>
 
           <div class="edition network-grade" aria-label="本次网络检测概况">
@@ -121,14 +121,14 @@
             </div>
           </div>
 
-          <ul class="latency-grid" id="latency-grid" aria-busy="false">
-            <li class="latency-placeholder">尚未检测</li>
-          </ul>
+          <div class="latency-groups" id="latency-groups" aria-busy="false">
+            <p class="latency-placeholder">尚未检测</p>
+          </div>
         </section>
 
         <aside class="method-note">
           <p class="daily-note-label">如何计算</p>
-          <p>结果从服务器发起，统计 DNS、TCP、TLS 到收到响应头的总耗时。它反映服务器的出口连接质量，不等同于你当前设备到服务器的延迟。</p>
+          <p>每个站点由服务器连续检测 5 次，以成功样本的平均耗时作为结果。耗时包含 DNS、TCP、TLS 到收到响应头的过程，不等同于你当前设备到服务器的延迟。</p>
         </aside>
       </div>
     </main>

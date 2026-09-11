@@ -12,7 +12,7 @@
 ACME CA ── HTTP :80 ───────────────────────────────────────── Caddy :8080
 ```
 
-公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认网站可通过顶部导航在“60 秒读世界”和“网络延迟”之间切换；网络检测由服务器并发连接固定的主流站点，接口不接受用户提供的目标地址。关闭 60s 功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 和网络检测服务都只接入内部 Docker 网络，不发布宿主机端口。
+公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认网站可通过顶部导航在“60 秒读世界”和“网络延迟”之间切换；网络检测按国家和地区展示固定的门户、新闻、流媒体及社交站点。每个站点连续检测 5 次，并以成功样本的平均耗时作为结果；接口不接受用户提供的目标地址。关闭 60s 功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 和网络检测服务都只接入内部 Docker 网络，不发布宿主机端口。
 
 可选中转只作用于生成的客户端入口：客户端先连接中转机，中转机把原始 TCP 流量转发到节点 `443`，REALITY 的 SNI 和服务端域名仍使用 `DOMAIN`。
 
@@ -109,7 +109,7 @@ sysctl net.ipv4.tcp_available_congestion_control
    ./manage.sh init
    ```
 
-   初始化会拉取固定版本的官方 Xray 镜像，并生成 UUID、X25519 密钥和 16 位 short ID。启动时 Compose 会拉取固定版本的 Caddy；仅在启用新闻功能时拉取并启动 60s API。再次运行 `init` 会保留原凭据，只重新渲染配置。
+   初始化会拉取固定版本的官方 Xray 镜像，并生成 UUID、X25519 密钥和 16 位 short ID。启动时 Compose 会拉取固定版本的 Caddy；仅在启用新闻功能时启动 60s API 并构建网络检测服务。再次运行 `init` 会保留原凭据，只重新渲染配置。
 
 3. 验证并启动：
 
@@ -310,7 +310,7 @@ docker compose --env-file .env pull
 
 - `templates/`：可提交的 Xray 和 Caddy 模板。
 - `site/`：“60 秒读世界”与网络延迟前端；浏览器只请求同源 API。新闻成功结果会缓存到浏览器本地，接口暂时不可用时显示上次结果。
-- `network-check/`：无第三方 npm 依赖的固定目标检测服务；结果缓存 15 秒，避免页面刷新产生不必要的外部请求。
+- `network-check/`：无第三方 npm 依赖的固定目标检测服务；覆盖中国大陆、香港、日本、美国、英国、德国和法国共 22 个站点，每站检测 5 次，结果缓存 30 秒。
 - `site/static/`：关闭 60s 功能时使用的独立静态页，不加载 JavaScript，也不请求任何 API。
 - `generated/credentials.env`：服务端身份凭据，权限 `0600`。
 - `generated/xray/config.json`：包含 REALITY 私钥，权限 `0644`，供官方镜像中的非 root Xray 进程读取；宿主机上的父目录 `generated/` 与 `generated/xray/` 均为 `0700`，其他宿主机用户无法穿过目录读取该文件。
