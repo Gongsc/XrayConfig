@@ -400,9 +400,8 @@ h1 {
   font-size: clamp(2.6rem, 7vw, 5.8rem);
 }
 
-.network-grade strong {
-  font-family: Georgia, serif;
-  font-size: 1.6rem;
+.network-intro {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .network-panel {
@@ -497,8 +496,8 @@ h1 {
 .latency-card {
   display: grid;
   grid-template-columns: 1fr auto;
-  grid-template-rows: auto 1fr auto;
-  gap: 0.45rem 1rem;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 0.55rem 1rem;
   transition: background-color 180ms ease;
 }
 
@@ -527,6 +526,68 @@ h1 {
   font-size: clamp(1.65rem, 3vw, 2.35rem);
   line-height: 1;
   text-align: right;
+}
+
+.sample-results {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  align-self: end;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sample-result {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+  justify-items: center;
+  padding: 0.45rem 0.2rem;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  text-align: center;
+}
+
+.sample-result span {
+  font-size: 0.58rem;
+  line-height: 1;
+}
+
+.sample-result strong {
+  overflow: hidden;
+  max-width: 100%;
+  font-family: Georgia, serif;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sample-result[data-tone="fast"] {
+  border-color: #78a789;
+  background: #e3efe6;
+  color: #245f38;
+}
+
+.sample-result[data-tone="normal"] {
+  border-color: #c69b52;
+  background: #f5ead3;
+  color: #76500d;
+}
+
+.sample-result[data-tone="slow"] {
+  border-color: #cf8d87;
+  background: #f4dedb;
+  color: #842521;
+}
+
+.sample-result[data-tone="error"] {
+  border-color: var(--line-strong);
+  background: #e9e5dd;
+  color: #554f48;
 }
 
 .latency-value small {

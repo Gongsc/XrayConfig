@@ -264,7 +264,9 @@ render_files() {
           print ""
           print "  handle /api/network-check {"
           print "    rewrite * /check"
-          print "    reverse_proxy network-check:8080"
+          print "    reverse_proxy network-check:8080 {"
+          print "      flush_interval -1"
+          print "    }"
           print "  }"
         }
         next

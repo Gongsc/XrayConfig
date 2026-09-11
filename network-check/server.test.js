@@ -59,7 +59,8 @@ test("checkTarget averages successful samples and keeps failure count", async ()
 
 test("runChecks preserves the fixed target order", async () => {
   const fakeFetch = async () => ({ body: { cancel: async () => {} } });
-  const output = await runChecks(fakeFetch);
+  const samples = [];
+  const output = await runChecks(fakeFetch, (sample) => samples.push(sample));
 
   assert.equal(output.schemaVersion, SCHEMA_VERSION);
   assert.equal(output.sampleCount, SAMPLE_COUNT);
@@ -69,6 +70,11 @@ test("runChecks preserves the fixed target order", async () => {
   assert.deepEqual([...new Set(output.results.map(({ regionCode }) => regionCode))], [
     "CN", "HK", "JP", "US", "GB", "DE", "FR",
   ]);
+  assert.equal(samples.length, TARGETS.length * SAMPLE_COUNT);
+  assert.deepEqual(
+    samples.filter(({ targetId }) => targetId === "baidu").map(({ sampleIndex }) => sampleIndex),
+    [1, 2, 3, 4, 5],
+  );
 });
 
 test("friendlyError distinguishes timeouts and DNS failures", () => {

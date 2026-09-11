@@ -86,12 +86,6 @@
             <h1 id="network-title">这台服务器，到世界有多远？</h1>
             <p class="summary">按国家与地区检测 22 个常用站点，覆盖门户、新闻、流媒体和社交平台。</p>
           </div>
-
-          <div class="edition network-grade" aria-label="本次网络检测概况">
-            <span class="edition-label">平均延迟</span>
-            <strong id="average-latency">—</strong>
-            <span id="network-grade-label">等待检测</span>
-          </div>
         </section>
 
         <div class="toolbar">
@@ -116,7 +110,7 @@
               <strong id="fastest-result">—</strong>
             </div>
             <div>
-              <span>检测时间</span>
+              <span id="progress-label">检测进度</span>
               <strong id="checked-time">—</strong>
             </div>
           </div>
@@ -128,7 +122,7 @@
 
         <aside class="method-note">
           <p class="daily-note-label">如何计算</p>
-          <p>每个站点由服务器连续检测 5 次，以成功样本的平均耗时作为结果。耗时包含 DNS、TCP、TLS 到收到响应头的过程，不等同于你当前设备到服务器的延迟。</p>
+          <p>每个站点由服务器连续检测 5 次，每次结果都会实时显示；站点主数值为成功样本的平均耗时。绿色、黄色和红色分别表示流畅、一般和较慢，失败使用灰色并保留原因。</p>
         </aside>
       </div>
     </main>

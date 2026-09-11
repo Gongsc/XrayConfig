@@ -3,9 +3,8 @@
 const http = require("node:http");
 
 const LISTEN_PORT = 8080;
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const REQUEST_TIMEOUT_MS = 8_000;
-const CACHE_LIFETIME_MS = 30_000;
 const SAMPLE_COUNT = 5;
 const TARGETS = Object.freeze([
   { id: "baidu", name: "百度", regionCode: "CN", regionName: "中国大陆", category: "搜索", url: "https://www.baidu.com/" },
@@ -32,10 +31,6 @@ const TARGETS = Object.freeze([
   { id: "france-tv", name: "France.tv", regionCode: "FR", regionName: "法国", category: "流媒体", url: "https://www.france.tv/favicon.ico" },
 ]);
 
-let cachedResponse;
-let cachedAt = 0;
-let activeCheck;
-
 function friendlyError(error) {
   if (error?.name === "TimeoutError" || error?.name === "AbortError") return "连接超时";
   if (error?.cause?.code === "ENOTFOUND" || error?.cause?.code === "EAI_AGAIN") {
@@ -44,7 +39,7 @@ function friendlyError(error) {
   return "无法建立连接";
 }
 
-async function checkOnce(target, fetchImpl = fetch) {
+async function checkOnce(target, fetchImpl = fetch, signal) {
   const started = performance.now();
   const host = new URL(target.url).hostname;
 
@@ -56,7 +51,9 @@ async function checkOnce(target, fetchImpl = fetch) {
         "User-Agent": "server-network-check/1.0",
       },
       redirect: "manual",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
+        : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const latencyMs = Math.max(1, Math.round(performance.now() - started));
     await response.body?.cancel().catch(() => {});
@@ -78,14 +75,26 @@ async function checkOnce(target, fetchImpl = fetch) {
   }
 }
 
-async function checkTarget(target, fetchImpl = fetch, sampleCount = SAMPLE_COUNT) {
+async function checkTarget(
+  target,
+  fetchImpl = fetch,
+  sampleCount = SAMPLE_COUNT,
+  onSample = () => {},
+  signal,
+) {
   const samples = [];
   let lastError = "无法建立连接";
 
   for (let attempt = 0; attempt < sampleCount; attempt += 1) {
-    const sample = await checkOnce(target, fetchImpl);
+    const sample = await checkOnce(target, fetchImpl, signal);
     if (sample.reachable) samples.push(sample.latencyMs);
     else lastError = sample.error;
+    onSample({
+      targetId: target.id,
+      sampleIndex: attempt + 1,
+      reachable: sample.reachable,
+      ...(sample.reachable ? { latencyMs: sample.latencyMs } : { error: sample.error }),
+    });
   }
 
   const base = {
@@ -110,28 +119,16 @@ async function checkTarget(target, fetchImpl = fetch, sampleCount = SAMPLE_COUNT
   };
 }
 
-async function runChecks(fetchImpl = fetch) {
-  const results = await Promise.all(TARGETS.map((target) => checkTarget(target, fetchImpl)));
+async function runChecks(fetchImpl = fetch, onSample = () => {}, signal) {
+  const results = await Promise.all(
+    TARGETS.map((target) => checkTarget(target, fetchImpl, SAMPLE_COUNT, onSample, signal)),
+  );
   return {
     schemaVersion: SCHEMA_VERSION,
     checkedAt: new Date().toISOString(),
     sampleCount: SAMPLE_COUNT,
     results,
   };
-}
-
-async function getChecks() {
-  if (cachedResponse && Date.now() - cachedAt < CACHE_LIFETIME_MS) return cachedResponse;
-  if (!activeCheck) {
-    activeCheck = runChecks().then((output) => {
-      cachedResponse = output;
-      cachedAt = Date.now();
-      return output;
-    }).finally(() => {
-      activeCheck = undefined;
-    });
-  }
-  return activeCheck;
 }
 
 function sendJSON(response, status, payload) {
@@ -141,6 +138,23 @@ function sendJSON(response, status, payload) {
     "X-Content-Type-Options": "nosniff",
   });
   response.end(`${JSON.stringify(payload)}\n`);
+}
+
+function streamEvent(response, payload) {
+  if (!response.destroyed && !response.writableEnded) {
+    response.write(`${JSON.stringify(payload)}\n`);
+  }
+}
+
+function publicTarget(target) {
+  return {
+    id: target.id,
+    name: target.name,
+    host: new URL(target.url).hostname,
+    regionCode: target.regionCode,
+    regionName: target.regionName,
+    category: target.category,
+  };
 }
 
 function createServer() {
@@ -161,11 +175,35 @@ function createServer() {
       return;
     }
 
+    const controller = new AbortController();
+    response.on("close", () => {
+      if (!response.writableEnded) controller.abort();
+    });
+    response.writeHead(200, {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "X-Accel-Buffering": "no",
+      "X-Content-Type-Options": "nosniff",
+    });
+    response.flushHeaders();
+    streamEvent(response, {
+      type: "meta",
+      schemaVersion: SCHEMA_VERSION,
+      sampleCount: SAMPLE_COUNT,
+      targets: TARGETS.map(publicTarget),
+    });
+
     try {
-      sendJSON(response, 200, await getChecks());
+      const output = await runChecks(
+        fetch,
+        (sample) => streamEvent(response, { type: "sample", ...sample }),
+        controller.signal,
+      );
+      streamEvent(response, { type: "complete", ...output });
     } catch {
-      sendJSON(response, 503, { error: "network check unavailable" });
+      streamEvent(response, { type: "error", message: "network check unavailable" });
     }
+    response.end();
   });
 }
 
@@ -201,5 +239,6 @@ module.exports = {
   checkTarget,
   createServer,
   friendlyError,
+  publicTarget,
   runChecks,
 };

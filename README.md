@@ -226,7 +226,7 @@ openssl s_client -connect node.example.com:443 -servername node.example.com </de
 
 将示例域名替换为实际域名。验收结果应为：
 
-- 启用时，浏览器访问 `https://DOMAIN` 显示“60 秒读世界”，并可从顶部切换到网络延迟页；`https://DOMAIN/api/60s` 与 `https://DOMAIN/api/network-check` 返回 JSON。
+- 启用时，浏览器访问 `https://DOMAIN` 显示“60 秒读世界”，并可从顶部切换到网络延迟页；`https://DOMAIN/api/60s` 返回 JSON，`https://DOMAIN/api/network-check` 返回逐行 JSON（NDJSON）流。
 - 关闭时，浏览器显示“一切运行正常”的静态页，两个 API 均返回 404，`docker compose ps` 中没有 `news-api` 或 `network-check`。
 - 无论是否启用，60s API 的 `4399` 端口都不应出现在宿主机监听列表中。
 - HTTPS 证书有效，证书域名与 `DOMAIN` 一致。
@@ -312,7 +312,7 @@ docker compose --env-file .env pull
 
 - `templates/`：可提交的 Xray 和 Caddy 模板。
 - `site/`：“60 秒读世界”与网络延迟前端；浏览器只请求同源 API。新闻成功结果会缓存到浏览器本地，接口暂时不可用时显示上次结果。
-- `network-check/`：无第三方 npm 依赖的固定目标检测服务；覆盖中国大陆、香港、日本、美国、英国、德国和法国共 22 个站点，每站检测 5 次，结果缓存 30 秒。
+- `network-check/`：无第三方 npm 依赖的固定目标检测服务；覆盖中国大陆、香港、日本、美国、英国、德国和法国共 22 个站点。页面先展示全部站点，再将每站 5 次检测结果逐条推送并按延迟质量着色。
 - `site/static/`：关闭 60s 功能时使用的独立静态页，不加载 JavaScript，也不请求任何 API。
 - `generated/credentials.env`：服务端身份凭据，权限 `0600`。
 - `generated/xray/config.json`：包含 REALITY 私钥，权限 `0644`，供官方镜像中的非 root Xray 进程读取；宿主机上的父目录 `generated/` 与 `generated/xray/` 均为 `0700`，其他宿主机用户无法穿过目录读取该文件。
@@ -353,7 +353,7 @@ Caddy 容器丢弃全部默认 Linux capabilities 后，只重新加入 `NET_BIN
 
 - 确认 `.env` 中 `ENABLE_60S=true`，并在修改后运行 `./manage.sh up`。
 - 查看服务状态与日志：`./manage.sh status`、`./manage.sh logs network-check`。
-- 从外部执行 `curl -fsS https://DOMAIN/api/network-check` 检查完整链路。
+- 从外部执行 `curl -fsS -N https://DOMAIN/api/network-check`，确认能持续收到 `meta`、`sample` 和 `complete` 事件。
 - 若只有个别站点显示不可达，通常是目标站点限制了当前 VPS 的地区或 IP；这不会影响其他检测结果。
 
 ### 网站可用但代理无法连接
