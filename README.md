@@ -1,17 +1,18 @@
 # VLESS + REALITY 与普通 HTTPS 网站共用 443
 
-这个项目默认在同一台 VPS 上运行 Xray、Caddy 和可选的 60s API 三个容器：
+这个项目默认在同一台 VPS 上运行 Xray、Caddy，以及可选的 60s API 与网络检测服务：
 
 ```text
 浏览器 ── HTTPS :443 ──┐                                      ┌─ 静态页面
                        ├─ Xray :8443 ── 未通过 REALITY 验证 ── Caddy :8443
 代理客户端 ─ REALITY ──┘              └─ 验证通过 ──────────── Internet
-                                                               └─ /api/60s ── 60s API :4399（可选）
+                                                               ├─ /api/60s ── 60s API :4399（可选）
+                                                               └─ /api/network-check ── 网络检测 :8080（可选）
 
 ACME CA ── HTTP :80 ───────────────────────────────────────── Caddy :8080
 ```
 
-公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认显示“60 秒读世界”新闻页；关闭该功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 只接入内部 Docker 网络，不发布宿主机端口。
+公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认网站可通过顶部导航在“60 秒读世界”和“网络延迟”之间切换；网络检测由服务器并发连接固定的主流站点，接口不接受用户提供的目标地址。关闭 60s 功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 和网络检测服务都只接入内部 Docker 网络，不发布宿主机端口。
 
 可选中转只作用于生成的客户端入口：客户端先连接中转机，中转机把原始 TCP 流量转发到节点 `443`，REALITY 的 SNI 和服务端域名仍使用 `DOMAIN`。
 
@@ -209,9 +210,10 @@ ENABLE_60S=false
 ./manage.sh logs caddy
 ./manage.sh logs xray
 ./manage.sh logs news-api
+./manage.sh logs network-check
 ```
 
-`logs news-api` 仅在 `ENABLE_60S=true` 时可用。
+`logs news-api` 和 `logs network-check` 仅在 `ENABLE_60S=true` 时可用。
 
 从 VPS 之外的网络检查普通网站：
 
@@ -222,8 +224,8 @@ openssl s_client -connect node.example.com:443 -servername node.example.com </de
 
 将示例域名替换为实际域名。验收结果应为：
 
-- 启用时，浏览器访问 `https://DOMAIN` 显示“60 秒读世界”，并列出当日简报与每日微语；`https://DOMAIN/api/60s` 返回 JSON。
-- 关闭时，浏览器显示“一切运行正常”的静态页，`/api/60s` 返回 404，`docker compose ps` 中没有 `news-api`。
+- 启用时，浏览器访问 `https://DOMAIN` 显示“60 秒读世界”，并可从顶部切换到网络延迟页；`https://DOMAIN/api/60s` 与 `https://DOMAIN/api/network-check` 返回 JSON。
+- 关闭时，浏览器显示“一切运行正常”的静态页，两个 API 均返回 404，`docker compose ps` 中没有 `news-api` 或 `network-check`。
 - 无论是否启用，60s API 的 `4399` 端口都不应出现在宿主机监听列表中。
 - HTTPS 证书有效，证书域名与 `DOMAIN` 一致。
 - 分享链接可导入客户端，并能通过 VPS 访问 TCP 和 UDP 目标。
@@ -275,9 +277,10 @@ docker compose --env-file .env up -d --force-recreate
 ./manage.sh logs caddy
 ./manage.sh logs xray
 ./manage.sh logs news-api
+./manage.sh logs network-check
 ```
 
-关闭新闻功能后没有 `news-api` 容器，此时无需查看该项日志。
+关闭新闻功能后没有 `news-api` 和 `network-check` 容器，此时无需查看这两项日志。
 
 Docker `local` 驱动的轮转参数参见[官方文档](https://docs.docker.com/engine/logging/drivers/local/)。
 
@@ -301,12 +304,13 @@ docker compose --env-file .env pull
 ./manage.sh up
 ```
 
-升级后必须重新测试普通网站、新闻接口与 REALITY 客户端。不要使用自动更新容器工具无审查地替换这些镜像。
+升级后必须重新测试普通网站、新闻与网络检测接口，以及 REALITY 客户端。不要使用自动更新容器工具无审查地替换这些镜像。
 
 ## 文件与安全说明
 
 - `templates/`：可提交的 Xray 和 Caddy 模板。
-- `site/`：“60 秒读世界”前端；浏览器只请求同源 `/api/60s` 的 JSON 数据，成功结果会缓存到浏览器本地，接口暂时不可用时显示上次结果。
+- `site/`：“60 秒读世界”与网络延迟前端；浏览器只请求同源 API。新闻成功结果会缓存到浏览器本地，接口暂时不可用时显示上次结果。
+- `network-check/`：无第三方 npm 依赖的固定目标检测服务；结果缓存 15 秒，避免页面刷新产生不必要的外部请求。
 - `site/static/`：关闭 60s 功能时使用的独立静态页，不加载 JavaScript，也不请求任何 API。
 - `generated/credentials.env`：服务端身份凭据，权限 `0600`。
 - `generated/xray/config.json`：包含 REALITY 私钥，权限 `0644`，供官方镜像中的非 root Xray 进程读取；宿主机上的父目录 `generated/` 与 `generated/xray/` 均为 `0700`，其他宿主机用户无法穿过目录读取该文件。
@@ -315,7 +319,7 @@ docker compose --env-file .env pull
 
 `generated/`、`.env`、`backups/` 已加入 `.gitignore`。不要将这些文件发送到公开仓库、工单或聊天记录。
 
-Xray 路由会阻止代理客户端访问 `geoip:private` 覆盖的私网和链路本地地址，减少凭据泄露后访问 VPS 内网服务的风险。配置默认不记录 Xray 访问日志；Caddy 仅把普通网站访问日志输出到容器日志。Caddy 只把精确路径 `/api/60s` 改写为内部 60s API 的 JSON 接口，不会向公网暴露该容器的其他接口。Caddy 不依赖新闻容器通过健康检查才启动，因此新闻服务异常时静态页面与证书服务仍保持可用。
+Xray 路由会阻止代理客户端访问 `geoip:private` 覆盖的私网和链路本地地址，减少凭据泄露后访问 VPS 内网服务的风险。配置默认不记录 Xray 访问日志；Caddy 仅把普通网站访问日志输出到容器日志。Caddy 只把精确路径 `/api/60s` 和 `/api/network-check` 分别改写到对应内部接口，不会向公网暴露容器的其他路径。网络检测服务只连接源码中固定的 HTTPS 目标，不接受 URL、主机名或 IP 参数。Caddy 不依赖功能容器通过健康检查才启动，因此它们异常时静态页面与证书服务仍保持可用。
 
 Caddy 容器丢弃全部默认 Linux capabilities 后，只重新加入 `NET_BIND_SERVICE`。虽然 Caddy 在容器内监听的是非特权端口 `8080/8443`，官方镜像中的 `/usr/bin/caddy` 自带该文件能力；若从 capability bounding set 中完全删除，Linux 会在执行二进制时返回 `operation not permitted`。该能力不会让容器访问宿主机的其他资源。
 
@@ -342,6 +346,13 @@ Caddy 容器丢弃全部默认 Linux capabilities 后，只重新加入 `NET_BIN
 - 在服务器执行 `curl -fsS http://127.0.0.1/` 检查 Caddy 的 HTTP 入口，或从外部执行 `curl -fsS https://DOMAIN/api/60s` 检查完整链路。
 - 60s API 需要从互联网获取日更数据；确认 VPS 的 DNS 与出站 HTTPS 正常。
 - 浏览器成功读取过一次后会保留本地缓存；接口短时不可用时页面会标记“离线缓存”。
+
+### 页面显示“网络检测服务暂时不可用”
+
+- 确认 `.env` 中 `ENABLE_60S=true`，并在修改后运行 `./manage.sh up`。
+- 查看服务状态与日志：`./manage.sh status`、`./manage.sh logs network-check`。
+- 从外部执行 `curl -fsS https://DOMAIN/api/network-check` 检查完整链路。
+- 若只有个别站点显示不可达，通常是目标站点限制了当前 VPS 的地区或 IP；这不会影响其他检测结果。
 
 ### 网站可用但代理无法连接
 

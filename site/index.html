@@ -3,74 +3,140 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="每天 60 秒，浏览今日值得关注的世界新闻。">
+    <meta name="description" content="每天 60 秒浏览世界新闻，并检测当前服务器到主流站点的网络延迟。">
     <meta name="theme-color" content="#f4f0e8">
-    <title>60 秒读世界</title>
+    <title>60 秒读世界 · 网络检测</title>
     <link rel="stylesheet" href="/style.css">
     <script src="/app.js" defer></script>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
     <header class="masthead">
-      <a class="brand" href="/" aria-label="60 秒读世界首页">
+      <a class="brand" href="#briefing" aria-label="60 秒读世界首页">
         <span class="brand-mark" aria-hidden="true">60</span>
         <span class="brand-copy">
           <strong>秒读世界</strong>
           <span>一分钟 · 知天下</span>
         </span>
       </a>
+      <nav class="primary-nav" aria-label="主要导航">
+        <a class="nav-link is-active" href="#briefing" data-view-link="briefing" aria-current="page">
+          <span class="nav-index">01</span>
+          <span>60s</span>
+        </a>
+        <a class="nav-link" href="#network" data-view-link="network">
+          <span class="nav-index">02</span>
+          <span>网络延迟</span>
+        </a>
+      </nav>
       <p class="today" id="today">今日简报</p>
     </header>
 
-    <main>
-      <section class="intro" aria-labelledby="page-title">
-        <div>
-          <p class="kicker">DAILY BRIEFING</p>
-          <h1 id="page-title">今天，世界发生了什么？</h1>
-          <p class="summary">用一杯咖啡的片刻，读完今日值得关注的消息。</p>
+    <main id="main-content" tabindex="-1">
+      <div class="page-view" id="briefing-view" data-view="briefing">
+        <section class="intro" aria-labelledby="page-title">
+          <div>
+            <p class="kicker">DAILY BRIEFING</p>
+            <h1 id="page-title">今天，世界发生了什么？</h1>
+            <p class="summary">用一杯咖啡的片刻，读完今日值得关注的消息。</p>
+          </div>
+
+          <div class="edition" aria-label="本期信息">
+            <span class="edition-label">本期</span>
+            <strong id="edition-count">正在整理</strong>
+            <span id="edition-meta">请稍候</span>
+          </div>
+        </section>
+
+        <div class="toolbar">
+          <p class="status" id="status" role="status" aria-live="polite">正在获取今日简报…</p>
+          <button class="refresh-button" id="refresh" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+              <path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+            </svg>
+            <span>刷新简报</span>
+          </button>
         </div>
 
-        <div class="edition" aria-label="本期信息">
-          <span class="edition-label">本期</span>
-          <strong id="edition-count">正在整理</strong>
-          <span id="edition-meta">请稍候</span>
-        </div>
-      </section>
+        <section class="briefing" aria-labelledby="briefing-title">
+          <h2 class="visually-hidden" id="briefing-title">今日新闻简报</h2>
+          <ol class="news-list is-loading" id="news-list" aria-busy="true">
+            <li class="skeleton"><span></span></li>
+            <li class="skeleton"><span></span></li>
+            <li class="skeleton"><span></span></li>
+            <li class="skeleton"><span></span></li>
+            <li class="skeleton"><span></span></li>
+            <li class="skeleton"><span></span></li>
+          </ol>
+          <noscript>
+            <p class="notice">需要启用 JavaScript 才能读取今日简报。</p>
+          </noscript>
+        </section>
 
-      <div class="toolbar">
-        <p class="status" id="status" role="status" aria-live="polite">正在获取今日简报…</p>
-        <button class="refresh-button" id="refresh" type="button">
-          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
-            <path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
-          </svg>
-          <span>刷新简报</span>
-        </button>
+        <aside class="daily-note" id="daily-note" hidden>
+          <p class="daily-note-label">每日微语</p>
+          <blockquote id="daily-tip"></blockquote>
+        </aside>
       </div>
 
-      <section class="briefing" aria-labelledby="briefing-title">
-        <h2 class="visually-hidden" id="briefing-title">今日新闻简报</h2>
-        <ol class="news-list is-loading" id="news-list" aria-busy="true">
-          <li class="skeleton"><span></span></li>
-          <li class="skeleton"><span></span></li>
-          <li class="skeleton"><span></span></li>
-          <li class="skeleton"><span></span></li>
-          <li class="skeleton"><span></span></li>
-          <li class="skeleton"><span></span></li>
-        </ol>
-        <noscript>
-          <p class="notice">需要启用 JavaScript 才能读取今日简报。</p>
-        </noscript>
-      </section>
+      <div class="page-view" id="network-view" data-view="network" hidden>
+        <section class="intro network-intro" aria-labelledby="network-title">
+          <div>
+            <p class="kicker">SERVER NETWORK CHECK</p>
+            <h1 id="network-title">这台服务器，到世界有多远？</h1>
+            <p class="summary">由当前服务器连接六个常用站点，查看真实的 HTTPS 响应延迟与可用状态。</p>
+          </div>
 
-      <aside class="daily-note" id="daily-note" hidden>
-        <p class="daily-note-label">每日微语</p>
-        <blockquote id="daily-tip"></blockquote>
-      </aside>
+          <div class="edition network-grade" aria-label="本次网络检测概况">
+            <span class="edition-label">平均延迟</span>
+            <strong id="average-latency">—</strong>
+            <span id="network-grade-label">等待检测</span>
+          </div>
+        </section>
+
+        <div class="toolbar">
+          <p class="status" id="network-status" role="status" aria-live="polite">切换到本页后自动开始检测</p>
+          <button class="refresh-button" id="network-refresh" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+              <path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+            </svg>
+            <span>重新检测</span>
+          </button>
+        </div>
+
+        <section class="network-panel" aria-labelledby="network-results-title">
+          <h2 class="visually-hidden" id="network-results-title">站点网络延迟检测结果</h2>
+          <div class="network-summary" aria-label="检测数据摘要">
+            <div>
+              <span>在线站点</span>
+              <strong id="online-count">—</strong>
+            </div>
+            <div>
+              <span>最快响应</span>
+              <strong id="fastest-result">—</strong>
+            </div>
+            <div>
+              <span>检测时间</span>
+              <strong id="checked-time">—</strong>
+            </div>
+          </div>
+
+          <ul class="latency-grid" id="latency-grid" aria-busy="false">
+            <li class="latency-placeholder">尚未检测</li>
+          </ul>
+        </section>
+
+        <aside class="method-note">
+          <p class="daily-note-label">如何计算</p>
+          <p>结果从服务器发起，统计 DNS、TCP、TLS 到收到响应头的总耗时。它反映服务器的出口连接质量，不等同于你当前设备到服务器的延迟。</p>
+        </aside>
+      </div>
     </main>
 
     <footer>
       <p>保持好奇，也保持判断。</p>
       <p>
-        数据由
+        新闻数据由
         <a href="https://github.com/vikiboss/60s" target="_blank" rel="noopener noreferrer">60s API</a>
         提供
       </p>

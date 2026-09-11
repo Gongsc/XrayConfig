@@ -11,7 +11,7 @@ cleanup() {
 trap cleanup EXIT
 
 cp -R "$REPO_DIR/.env.example" "$REPO_DIR/compose.yaml" "$REPO_DIR/manage.sh" \
-  "$REPO_DIR/templates" "$REPO_DIR/site" "$TEST_DIR/"
+  "$REPO_DIR/templates" "$REPO_DIR/site" "$REPO_DIR/network-check" "$TEST_DIR/"
 
 sed \
   -e 's/^DOMAIN=.*/DOMAIN=node.example.com/' \
@@ -25,6 +25,7 @@ export PATH="$REPO_DIR/tests/fake-bin:$PATH"
 
 bash -n "$REPO_DIR/scripts/bootstrap-server.sh"
 node --check "$REPO_DIR/site/app.js"
+node --test "$REPO_DIR/network-check/server.test.js"
 "$REPO_DIR/scripts/bootstrap-server.sh" --help | grep -q 'Docker Engine and Compose'
 grep -q 'https://download.docker.com/linux/' "$REPO_DIR/scripts/bootstrap-server.sh"
 grep -q "ufw allow 80/tcp" "$REPO_DIR/scripts/bootstrap-server.sh"
@@ -40,11 +41,14 @@ ruby -e '
   compose = YAML.load_file(ARGV.fetch(0))
   caddy = compose.fetch("services").fetch("caddy")
   news_api = compose.fetch("services").fetch("news-api")
+  network_check = compose.fetch("services").fetch("network-check")
   abort "Caddy must retain NET_BIND_SERVICE" unless caddy.fetch("cap_add") == ["NET_BIND_SERVICE"]
   abort "Caddy must still drop default capabilities" unless caddy.fetch("cap_drop") == ["ALL"]
   abort "Caddy must remain available when the news API is unhealthy" if caddy.key?("depends_on")
   abort "60s API must not publish host ports" if news_api.key?("ports")
   abort "60s API must be optional" unless news_api.fetch("profiles") == ["news"]
+  abort "network checks must be optional with the full site" unless network_check.fetch("profiles") == ["news"]
+  abort "network checks must not publish host ports" if network_check.key?("ports")
   abort "60s API image must be configurable and pinned" unless news_api.fetch("image") == "${SIXTY_SECONDS_IMAGE:-vikiboss/60s:2.54.0}"
   compose.fetch("services").each do |name, service|
     logging = service.fetch("logging")
@@ -70,8 +74,12 @@ grep -q '^  handle /api/60s {' "$TEST_DIR/generated/Caddyfile"
 grep -q '^    root \* /srv$' "$TEST_DIR/generated/Caddyfile"
 grep -Fq 'rewrite * /v2/60s?encoding=json' "$TEST_DIR/generated/Caddyfile"
 grep -q '^    reverse_proxy news-api:4399$' "$TEST_DIR/generated/Caddyfile"
+grep -q '^  handle /api/network-check {' "$TEST_DIR/generated/Caddyfile"
+grep -q '^    reverse_proxy network-check:8080$' "$TEST_DIR/generated/Caddyfile"
 grep -q 'fetch(API_ENDPOINT' "$TEST_DIR/site/app.js"
+grep -q 'fetch(NETWORK_ENDPOINT' "$TEST_DIR/site/app.js"
 grep -q '60 秒读世界' "$TEST_DIR/site/index.html"
+grep -q '网络延迟' "$TEST_DIR/site/index.html"
 grep -q '一切运行正常' "$TEST_DIR/site/static/index.html"
 ! grep -q '<script' "$TEST_DIR/site/static/index.html"
 grep -Eq '^vless://11111111-2222-4333-8444-555555555555@relay\.example\.net:8443\?.*sni=node\.example\.com.*pbk=BBBB.*sid=[0-9a-f]{16}.*#Smoke%20Test$' \
@@ -94,6 +102,7 @@ ruby -pi -e '
 "$TEST_DIR/manage.sh" init >/dev/null
 grep -q '^    root \* /srv/static$' "$TEST_DIR/generated/Caddyfile"
 ! grep -q 'reverse_proxy news-api:4399' "$TEST_DIR/generated/Caddyfile"
+! grep -q 'reverse_proxy network-check:8080' "$TEST_DIR/generated/Caddyfile"
 ! grep -Eq '__[A-Z0-9_]+__' "$TEST_DIR/generated/Caddyfile"
 grep -Eq '^vless://11111111-2222-4333-8444-555555555555@node\.example\.com:443\?.*sni=node\.example\.com' \
   "$TEST_DIR/generated/client.txt"

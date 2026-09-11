@@ -164,3 +164,217 @@
   elements.refresh.addEventListener("click", loadBriefing);
   loadBriefing();
 })();
+
+(() => {
+  "use strict";
+
+  const NETWORK_ENDPOINT = "/api/network-check";
+  const REQUEST_TIMEOUT_MS = 12_000;
+  const VALID_VIEWS = new Set(["briefing", "network"]);
+
+  const elements = {
+    links: [...document.querySelectorAll("[data-view-link]")],
+    views: [...document.querySelectorAll("[data-view]")],
+    refresh: document.querySelector("#network-refresh"),
+    status: document.querySelector("#network-status"),
+    grid: document.querySelector("#latency-grid"),
+    average: document.querySelector("#average-latency"),
+    grade: document.querySelector("#network-grade-label"),
+    online: document.querySelector("#online-count"),
+    fastest: document.querySelector("#fastest-result"),
+    checked: document.querySelector("#checked-time"),
+  };
+
+  let activeController;
+  let hasChecked = false;
+
+  function currentView() {
+    const requested = window.location.hash.slice(1);
+    if (VALID_VIEWS.has(requested)) return requested;
+    if (!requested) return "briefing";
+    return elements.views.find((view) => !view.hidden)?.dataset.view || "briefing";
+  }
+
+  function showView() {
+    const selected = currentView();
+    elements.views.forEach((view) => {
+      view.hidden = view.dataset.view !== selected;
+    });
+    elements.links.forEach((link) => {
+      const isActive = link.dataset.viewLink === selected;
+      link.classList.toggle("is-active", isActive);
+      if (isActive) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+
+    if (selected === "network" && !hasChecked) loadNetworkResults();
+  }
+
+  function cleanText(value, maxLength = 100) {
+    return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+  }
+
+  function normalize(payload) {
+    if (!payload || typeof payload !== "object" || !Array.isArray(payload.results)) {
+      throw new Error("响应格式无效");
+    }
+
+    const results = payload.results.slice(0, 10).map((item) => {
+      if (!item || typeof item !== "object") throw new Error("检测项目无效");
+      const latency = Number(item.latencyMs);
+      return {
+        id: cleanText(item.id, 32),
+        name: cleanText(item.name, 40) || "未知站点",
+        host: cleanText(item.host, 100),
+        reachable: item.reachable === true,
+        latencyMs: Number.isFinite(latency) && latency >= 0 ? Math.round(latency) : 0,
+        error: cleanText(item.error, 60),
+      };
+    });
+
+    if (results.length === 0) throw new Error("没有检测结果");
+    return { checkedAt: cleanText(payload.checkedAt, 40), results };
+  }
+
+  function latencyTone(latency) {
+    if (latency < 200) return ["fast", "连接流畅"];
+    if (latency < 500) return ["normal", "连接一般"];
+    return ["slow", "连接较慢"];
+  }
+
+  function setLoading(isLoading) {
+    elements.grid.setAttribute("aria-busy", String(isLoading));
+    elements.refresh.disabled = isLoading;
+    elements.refresh.classList.toggle("is-spinning", isLoading);
+  }
+
+  function renderLoading() {
+    const item = document.createElement("li");
+    item.className = "latency-placeholder is-loading";
+    item.textContent = "服务器正在连接各站点…";
+    elements.grid.replaceChildren(item);
+    elements.status.textContent = "正在检测 6 个站点，最慢可能需要 8 秒";
+    delete elements.status.dataset.tone;
+  }
+
+  function renderResults(data) {
+    const reachable = data.results.filter((item) => item.reachable);
+    const fragment = document.createDocumentFragment();
+
+    data.results.forEach((result) => {
+      const card = document.createElement("li");
+      card.className = "latency-card";
+
+      const name = document.createElement("h3");
+      name.className = "latency-name";
+      name.textContent = result.name;
+
+      const host = document.createElement("span");
+      host.className = "latency-host";
+      host.textContent = result.host;
+
+      const value = document.createElement("span");
+      value.className = "latency-value";
+
+      const state = document.createElement("span");
+      state.className = "latency-state";
+
+      if (result.reachable) {
+        const [tone, label] = latencyTone(result.latencyMs);
+        card.dataset.tone = tone;
+        value.append(String(result.latencyMs));
+        const unit = document.createElement("small");
+        unit.textContent = "ms";
+        value.append(unit);
+        state.textContent = label;
+      } else {
+        card.dataset.tone = "error";
+        value.textContent = "不可达";
+        state.textContent = result.error || "连接失败";
+      }
+
+      card.append(name, host, value, state);
+      fragment.append(card);
+    });
+
+    elements.grid.replaceChildren(fragment);
+    elements.online.textContent = `${reachable.length} / ${data.results.length}`;
+
+    if (reachable.length > 0) {
+      const average = Math.round(
+        reachable.reduce((sum, item) => sum + item.latencyMs, 0) / reachable.length,
+      );
+      const fastest = reachable.reduce((best, item) =>
+        item.latencyMs < best.latencyMs ? item : best,
+      );
+      const [, gradeLabel] = latencyTone(average);
+      elements.average.textContent = `${average} ms`;
+      elements.grade.textContent = gradeLabel;
+      elements.fastest.textContent = `${fastest.name} · ${fastest.latencyMs} ms`;
+    } else {
+      elements.average.textContent = "不可用";
+      elements.grade.textContent = "全部不可达";
+      elements.fastest.textContent = "—";
+    }
+
+    const checkedAt = new Date(data.checkedAt);
+    elements.checked.textContent = Number.isNaN(checkedAt.getTime())
+      ? "刚刚"
+      : new Intl.DateTimeFormat("zh-CN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).format(checkedAt);
+
+    const failed = data.results.length - reachable.length;
+    elements.status.textContent = failed === 0
+      ? "检测完成，所有站点均可连接"
+      : `检测完成，${failed} 个站点暂时不可达`;
+    if (failed > 0) elements.status.dataset.tone = "warning";
+    else delete elements.status.dataset.tone;
+  }
+
+  function renderUnavailable() {
+    const item = document.createElement("li");
+    item.className = "latency-placeholder";
+    item.textContent = "网络检测服务暂时不可用，请稍后重试。";
+    elements.grid.replaceChildren(item);
+    elements.status.textContent = "未能取得检测结果";
+    elements.status.dataset.tone = "warning";
+    elements.average.textContent = "—";
+    elements.grade.textContent = "检测失败";
+    elements.online.textContent = "—";
+    elements.fastest.textContent = "—";
+    elements.checked.textContent = "—";
+  }
+
+  async function loadNetworkResults() {
+    if (activeController) activeController.abort();
+    activeController = new AbortController();
+    const timeout = window.setTimeout(() => activeController.abort(), REQUEST_TIMEOUT_MS);
+
+    hasChecked = true;
+    setLoading(true);
+    renderLoading();
+
+    try {
+      const response = await fetch(NETWORK_ENDPOINT, {
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        signal: activeController.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      renderResults(normalize(await response.json()));
+    } catch {
+      renderUnavailable();
+    } finally {
+      window.clearTimeout(timeout);
+      setLoading(false);
+    }
+  }
+
+  window.addEventListener("hashchange", showView);
+  elements.refresh.addEventListener("click", loadNetworkResults);
+  showView();
+})();

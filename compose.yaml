@@ -1,6 +1,33 @@
 name: vless-reality-site
 
 services:
+  network-check:
+    build:
+      context: ./network-check
+    profiles:
+      - news
+    restart: unless-stopped
+    networks:
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: local
+      options:
+        max-size: "${LOG_MAX_SIZE:-10m}"
+        max-file: "${LOG_MAX_FILE:-3}"
+    healthcheck:
+      test: ["CMD", "node", "/app/server.js", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   news-api:
     image: "${SIXTY_SECONDS_IMAGE:-vikiboss/60s:2.54.0}"
     profiles:

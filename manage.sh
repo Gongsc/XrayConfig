@@ -36,7 +36,7 @@ Commands:
   down              Stop the stack without deleting certificates
   restart           Restart active services
   status            Show container status
-  logs [service]    Follow logs (service: caddy, xray or news-api)
+  logs [service]    Follow logs (service: caddy, xray, news-api or network-check)
   show-client       Print the generated VLESS import link
   backup            Create a private backup archive under backups/
   rotate --yes      Back up and replace UUID, Reality keys and short ID
@@ -261,6 +261,11 @@ render_files() {
           print "    rewrite * /v2/60s?encoding=json"
           print "    reverse_proxy news-api:4399"
           print "  }"
+          print ""
+          print "  handle /api/network-check {"
+          print "    rewrite * /check"
+          print "    reverse_proxy network-check:8080"
+          print "  }"
         }
         next
       }
@@ -375,6 +380,7 @@ validate_configuration() {
 
 start_stack() {
   local caddy_was_running=false
+  local optional_service
 
   load_env
   require_docker
@@ -386,11 +392,14 @@ start_stack() {
   check_dns
   validate_configuration
 
-  if [[ "$ENABLE_60S" == "false" ]] && \
-    "${COMPOSE_ALL[@]}" ps --all --quiet news-api 2>/dev/null | grep -q .; then
-    info "Stopping the disabled 60s API service..."
-    "${COMPOSE_ALL[@]}" stop news-api
-    "${COMPOSE_ALL[@]}" rm --force news-api
+  if [[ "$ENABLE_60S" == "false" ]]; then
+    for optional_service in news-api network-check; do
+      if "${COMPOSE_ALL[@]}" ps --all --quiet "$optional_service" 2>/dev/null | grep -q .; then
+        info "Stopping disabled optional service: $optional_service"
+        "${COMPOSE_ALL[@]}" stop "$optional_service"
+        "${COMPOSE_ALL[@]}" rm --force "$optional_service"
+      fi
+    done
   fi
 
   "${COMPOSE[@]}" up -d
@@ -469,11 +478,12 @@ main() {
     logs)
       load_env
       require_docker
-      if [[ -n "${2:-}" && "${2:-}" != "caddy" && "${2:-}" != "xray" && "${2:-}" != "news-api" ]]; then
-        die "Service must be 'caddy', 'xray' or 'news-api'."
+      if [[ -n "${2:-}" && "${2:-}" != "caddy" && "${2:-}" != "xray" && \
+        "${2:-}" != "news-api" && "${2:-}" != "network-check" ]]; then
+        die "Service must be 'caddy', 'xray', 'news-api' or 'network-check'."
       fi
-      if [[ "${2:-}" == "news-api" && "$ENABLE_60S" == "false" ]]; then
-        die "news-api is disabled by ENABLE_60S=false."
+      if [[ ("${2:-}" == "news-api" || "${2:-}" == "network-check") && "$ENABLE_60S" == "false" ]]; then
+        die "${2:-} is disabled by ENABLE_60S=false."
       fi
       "${COMPOSE[@]}" logs --tail=100 --follow ${2:+"$2"}
       ;;
