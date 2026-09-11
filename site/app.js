@@ -1,6 +1,54 @@
 (() => {
   "use strict";
 
+  const STORAGE_KEY = "world-in-60-seconds:theme";
+  const root = document.documentElement;
+  const toggle = document.querySelector("#theme-toggle");
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function storedTheme() {
+    try {
+      const value = localStorage.getItem(STORAGE_KEY);
+      return value === "light" || value === "dark" ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function applyTheme(theme) {
+    const isDark = theme === "dark";
+    root.dataset.theme = theme;
+    toggle.setAttribute("aria-pressed", String(isDark));
+    toggle.setAttribute("aria-label", isDark ? "切换到亮色主题" : "切换到暗色主题");
+    if (themeColor) themeColor.content = isDark ? "#0b1020" : "#f7f8fb";
+  }
+
+  applyTheme(storedTheme() || (systemTheme.matches ? "dark" : "light"));
+
+  toggle.addEventListener("click", () => {
+    const nextTheme = root.dataset.theme === "dark" ? "light" : "dark";
+    applyTheme(nextTheme);
+    try {
+      localStorage.setItem(STORAGE_KEY, nextTheme);
+    } catch {
+      // The selected theme still applies when storage is unavailable.
+    }
+  });
+
+  const handleSystemThemeChange = (event) => {
+    if (!storedTheme()) applyTheme(event.matches ? "dark" : "light");
+  };
+  if (typeof systemTheme.addEventListener === "function") {
+    systemTheme.addEventListener("change", handleSystemThemeChange);
+  } else {
+    systemTheme.addListener(handleSystemThemeChange);
+  }
+})();
+
+(() => {
+  "use strict";
+
   const API_ENDPOINT = "/api/60s";
   const CACHE_KEY = "world-in-60-seconds:v1";
   const MAX_NEWS_ITEMS = 30;

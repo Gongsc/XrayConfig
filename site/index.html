@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="每天 60 秒浏览世界新闻，并检测当前服务器到主流站点的网络延迟。">
-    <meta name="theme-color" content="#f4f0e8">
+    <meta name="theme-color" content="#f7f8fb">
     <title>60 秒读世界 · 网络检测</title>
     <link rel="stylesheet" href="/style.css">
     <script src="/app.js" defer></script>
@@ -22,14 +22,26 @@
       <nav class="primary-nav" aria-label="主要导航">
         <a class="nav-link is-active" href="#briefing" data-view-link="briefing" aria-current="page">
           <span class="nav-index">01</span>
-          <span>60s</span>
+          <span>今日简报</span>
         </a>
         <a class="nav-link" href="#network" data-view-link="network">
           <span class="nav-index">02</span>
           <span>网络延迟</span>
         </a>
       </nav>
-      <p class="today" id="today">今日简报</p>
+      <div class="header-actions">
+        <p class="today" id="today">今日简报</p>
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切换到暗色主题" aria-pressed="false">
+          <svg class="sun-icon" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+            <circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M12 2.5v2M12 19.5v2M4.5 4.5l1.4 1.4M18.1 18.1l1.4 1.4M2.5 12h2M19.5 12h2M4.5 19.5l1.4-1.4M18.1 5.9l1.4-1.4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8"/>
+          </svg>
+          <svg class="moon-icon" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
+            <path d="M20 15.2A8.2 8.2 0 0 1 8.8 4a8.2 8.2 0 1 0 11.2 11.2Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+          </svg>
+          <span class="visually-hidden">切换主题</span>
+        </button>
+      </div>
     </header>
 
     <main id="main-content" tabindex="-1">
@@ -37,14 +49,32 @@
         <section class="intro" aria-labelledby="page-title">
           <div>
             <p class="kicker">DAILY BRIEFING</p>
-            <h1 id="page-title">今天，世界发生了什么？</h1>
+            <div class="title-line">
+              <h1 id="page-title">今天，世界发生了什么？</h1>
+              <span class="live-badge"><span aria-hidden="true"></span>实时更新</span>
+            </div>
             <p class="summary">用一杯咖啡的片刻，读完今日值得关注的消息。</p>
           </div>
+        </section>
 
-          <div class="edition" aria-label="本期信息">
-            <span class="edition-label">本期</span>
-            <strong id="edition-count">正在整理</strong>
-            <span id="edition-meta">请稍候</span>
+        <section class="overview-grid" aria-label="今日数据概览">
+          <div class="overview-card">
+            <span class="overview-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path d="M7 3.5h7l4 4V20.5H7zM14 3.5v4h4M10 12h5M10 15.5h5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg>
+            </span>
+            <span class="overview-copy"><strong id="edition-count">正在整理</strong><span id="edition-meta">请稍候</span></span>
+          </div>
+          <div class="overview-card">
+            <span class="overview-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><rect x="4" y="4" width="16" height="6" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="14" width="16" height="6" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h.01M8 17h.01M16 7h1M16 17h1" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg>
+            </span>
+            <span class="overview-copy"><strong>22 个站点</strong><span>覆盖 7 个国家与地区</span></span>
+          </div>
+          <div class="overview-card overview-card-accent">
+            <span class="overview-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12h4l2-7 4 14 2-7h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg>
+            </span>
+            <span class="overview-copy"><strong>服务已就绪</strong><span>新闻与网络检测双通道</span></span>
           </div>
         </section>
 
@@ -59,7 +89,12 @@
         </div>
 
         <section class="briefing" aria-labelledby="briefing-title">
-          <h2 class="visually-hidden" id="briefing-title">今日新闻简报</h2>
+          <div class="panel-heading">
+            <span class="panel-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 6h11M8 12h11M8 18h11M4 6h.01M4 12h.01M4 18h.01" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"/></svg>
+            </span>
+            <h2 id="briefing-title">今日新闻</h2>
+          </div>
           <ol class="news-list is-loading" id="news-list" aria-busy="true">
             <li class="skeleton"><span></span></li>
             <li class="skeleton"><span></span></li>
@@ -83,7 +118,10 @@
         <section class="intro network-intro" aria-labelledby="network-title">
           <div>
             <p class="kicker">SERVER NETWORK CHECK</p>
-            <h1 id="network-title">这台服务器，到世界有多远？</h1>
+            <div class="title-line">
+              <h1 id="network-title">这台服务器，到世界有多远？</h1>
+              <span class="live-badge"><span aria-hidden="true"></span>流式检测</span>
+            </div>
             <p class="summary">按国家与地区检测 22 个常用站点，覆盖门户、新闻、流媒体和社交平台。</p>
           </div>
         </section>
