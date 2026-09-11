@@ -3,6 +3,7 @@
 const http = require("node:http");
 
 const LISTEN_PORT = 8080;
+const SCHEMA_VERSION = 2;
 const REQUEST_TIMEOUT_MS = 8_000;
 const CACHE_LIFETIME_MS = 30_000;
 const SAMPLE_COUNT = 5;
@@ -111,7 +112,12 @@ async function checkTarget(target, fetchImpl = fetch, sampleCount = SAMPLE_COUNT
 
 async function runChecks(fetchImpl = fetch) {
   const results = await Promise.all(TARGETS.map((target) => checkTarget(target, fetchImpl)));
-  return { checkedAt: new Date().toISOString(), sampleCount: SAMPLE_COUNT, results };
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    checkedAt: new Date().toISOString(),
+    sampleCount: SAMPLE_COUNT,
+    results,
+  };
 }
 
 async function getChecks() {
@@ -187,4 +193,13 @@ if (require.main === module) {
   }
 }
 
-module.exports = { SAMPLE_COUNT, TARGETS, checkOnce, checkTarget, createServer, friendlyError, runChecks };
+module.exports = {
+  SAMPLE_COUNT,
+  SCHEMA_VERSION,
+  TARGETS,
+  checkOnce,
+  checkTarget,
+  createServer,
+  friendlyError,
+  runChecks,
+};

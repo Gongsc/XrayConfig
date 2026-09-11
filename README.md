@@ -118,6 +118,8 @@ sysctl net.ipv4.tcp_available_congestion_control
    ./manage.sh up
    ```
 
+   `up` 会自动重新构建网络检测镜像；修改 `network-check/` 后无需额外执行 `docker compose build`。
+
 4. 查看客户端导入链接：
 
    ```bash

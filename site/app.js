@@ -172,6 +172,7 @@
   const REQUEST_TIMEOUT_MS = 50_000;
   const EXPECTED_TARGETS = 22;
   const EXPECTED_SAMPLES = 5;
+  const NETWORK_SCHEMA_VERSION = 2;
   const VALID_VIEWS = new Set(["briefing", "network"]);
 
   const elements = {
@@ -220,10 +221,25 @@
     if (!payload || typeof payload !== "object" || !Array.isArray(payload.results)) {
       throw new Error("响应格式无效");
     }
+    if (payload.schemaVersion !== NETWORK_SCHEMA_VERSION) {
+      throw new Error("检测服务仍是旧版本，请重新部署以加载新的站点列表");
+    }
 
     const results = payload.results.slice(0, 40).map((item) => {
       if (!item || typeof item !== "object") throw new Error("检测项目无效");
       const latency = Number(item.latencyMs);
+      const attempts = Number(item.attempts);
+      const successes = Number(item.successes);
+      const reachable = item.reachable === true;
+      if (
+        !Number.isInteger(attempts) || attempts < 1 || attempts > 10 ||
+        !Number.isInteger(successes) || successes < 0 || successes > attempts ||
+        reachable !== (successes > 0) ||
+        (reachable && (!Number.isFinite(latency) || latency < 0)) ||
+        (!reachable && Number.isFinite(latency))
+      ) {
+        throw new Error("检测结果状态不一致，请重新检测");
+      }
       return {
         id: cleanText(item.id, 32),
         name: cleanText(item.name, 40) || "未知站点",
@@ -231,10 +247,10 @@
         regionCode: cleanText(item.regionCode, 8),
         regionName: cleanText(item.regionName, 40) || "其他地区",
         category: cleanText(item.category, 40) || "网站",
-        reachable: item.reachable === true,
-        latencyMs: Number.isFinite(latency) && latency >= 0 ? Math.round(latency) : 0,
-        attempts: Math.max(1, Math.min(10, Number(item.attempts) || EXPECTED_SAMPLES)),
-        successes: Math.max(0, Math.min(10, Number(item.successes) || 0)),
+        reachable,
+        latencyMs: reachable ? Math.round(latency) : 0,
+        attempts,
+        successes,
         error: cleanText(item.error, 60),
       };
     });
@@ -373,12 +389,12 @@
     else delete elements.status.dataset.tone;
   }
 
-  function renderUnavailable() {
+  function renderUnavailable(message = "网络检测服务暂时不可用，请稍后重试。") {
     const item = document.createElement("p");
     item.className = "latency-placeholder";
-    item.textContent = "网络检测服务暂时不可用，请稍后重试。";
+    item.textContent = message;
     elements.groups.replaceChildren(item);
-    elements.status.textContent = "未能取得检测结果";
+    elements.status.textContent = message;
     elements.status.dataset.tone = "warning";
     elements.average.textContent = "—";
     elements.grade.textContent = "检测失败";
@@ -404,8 +420,11 @@
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       renderResults(normalize(await response.json()));
-    } catch {
-      renderUnavailable();
+    } catch (error) {
+      const message = error instanceof Error && error.message
+        ? error.message
+        : "网络检测服务暂时不可用，请稍后重试。";
+      renderUnavailable(message);
     } finally {
       window.clearTimeout(timeout);
       setLoading(false);

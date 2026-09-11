@@ -2,7 +2,14 @@
 
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
-const { SAMPLE_COUNT, TARGETS, checkTarget, friendlyError, runChecks } = require("./server");
+const {
+  SAMPLE_COUNT,
+  SCHEMA_VERSION,
+  TARGETS,
+  checkTarget,
+  friendlyError,
+  runChecks,
+} = require("./server");
 
 test("checkTarget reports a reachable response and latency", async () => {
   let calls = 0;
@@ -54,6 +61,7 @@ test("runChecks preserves the fixed target order", async () => {
   const fakeFetch = async () => ({ body: { cancel: async () => {} } });
   const output = await runChecks(fakeFetch);
 
+  assert.equal(output.schemaVersion, SCHEMA_VERSION);
   assert.equal(output.sampleCount, SAMPLE_COUNT);
   assert.equal(output.results.length, TARGETS.length);
   assert.equal(TARGETS.length, 22);

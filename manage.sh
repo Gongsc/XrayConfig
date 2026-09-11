@@ -402,7 +402,7 @@ start_stack() {
     done
   fi
 
-  "${COMPOSE[@]}" up -d
+  "${COMPOSE[@]}" up -d --build
   if [[ "$caddy_was_running" == "true" ]]; then
     info "Restarting Caddy to load the rendered site configuration..."
     "${COMPOSE[@]}" restart caddy
