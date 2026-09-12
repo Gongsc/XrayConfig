@@ -29,10 +29,10 @@ cp -R "$REPO_DIR/.env.example" "$REPO_DIR/compose.yaml" "$REPO_DIR/manage.sh" \
   "$REPO_DIR/templates" "$REPO_DIR/site" "$REPO_DIR/network-check" "$FIRST_DEPLOY_DIR/"
 sed 's/^DOMAIN=.*/DOMAIN=first.example.com/' \
   "$FIRST_DEPLOY_DIR/.env.example" >"$FIRST_DEPLOY_DIR/.env"
-printf 'yes\n' | env FAKE_CADDY_LATEST=2.12.0 FAKE_XRAY_LATEST=26.9.8 \
+printf 'yes\n' | env FAKE_CADDY_LATEST=2.12.0 FAKE_XRAY_LATEST=26.10.1 \
   FAKE_SIXTY_SECONDS_LATEST=2.55.0 "$FIRST_DEPLOY_DIR/manage.sh" init >/dev/null
 grep -q '^CADDY_IMAGE=caddy:2.12.0-alpine$' "$FIRST_DEPLOY_DIR/.env"
-grep -q '^XRAY_IMAGE=ghcr.io/xtls/xray-core:26.9.8$' "$FIRST_DEPLOY_DIR/.env"
+grep -q '^XRAY_IMAGE=ghcr.io/xtls/xray-core:26.10.1$' "$FIRST_DEPLOY_DIR/.env"
 grep -q '^SIXTY_SECONDS_IMAGE=vikiboss/60s:2.55.0$' "$FIRST_DEPLOY_DIR/.env"
 
 bash -n "$REPO_DIR/scripts/bootstrap-server.sh"
@@ -147,16 +147,16 @@ grep -Eq '^vless://11111111-2222-4333-8444-555555555555@node\.example\.com:443\?
 "$TEST_DIR/manage.sh" check-updates >/dev/null
 
 update_log="$TEST_DIR/update-docker.log"
-printf 'n\n' | env FAKE_CADDY_LATEST=2.12.0 FAKE_XRAY_LATEST=26.9.8 \
+printf 'n\n' | env FAKE_CADDY_LATEST=2.12.0 FAKE_XRAY_LATEST=26.10.1 \
   FAKE_SIXTY_SECONDS_LATEST=2.55.0 FAKE_UPDATE_AVAILABLE=true FAKE_DOCKER_LOG="$update_log" \
   "$TEST_DIR/manage.sh" check-updates >"$TEST_DIR/update-cancelled.log"
 grep -q '^Updates are available:$' "$TEST_DIR/update-cancelled.log"
 grep -q 'caddy.*caddy:2.11.4-alpine.*caddy:2.12.0-alpine' "$TEST_DIR/update-cancelled.log"
-grep -q 'xray.*xray-core:26.7.11.*xray-core:26.9.8' "$TEST_DIR/update-cancelled.log"
+grep -q 'xray.*xray-core:26.9.9.*xray-core:26.10.1' "$TEST_DIR/update-cancelled.log"
 grep -q 'Update cancelled' "$TEST_DIR/update-cancelled.log"
 [[ ! -e "$update_log" ]]
 
-printf 'yes\nyes\n' | env FAKE_CADDY_LATEST=2.12.0 FAKE_XRAY_LATEST=26.9.8 \
+printf 'yes\nyes\n' | env FAKE_CADDY_LATEST=2.12.0 FAKE_XRAY_LATEST=26.10.1 \
   FAKE_SIXTY_SECONDS_LATEST=2.55.0 FAKE_UPDATE_AVAILABLE=true FAKE_DOCKER_LOG="$update_log" \
   "$TEST_DIR/manage.sh" check-updates >"$TEST_DIR/update-applied.log"
 grep -q 'Selected service updates applied' "$TEST_DIR/update-applied.log"
@@ -166,14 +166,14 @@ grep -q '^ROLLBACK_COUNT=2$' "$TEST_DIR/generated/update-rollback.env"
 grep -q '^ROLLBACK_ENV_KEY_0=CADDY_IMAGE$' "$TEST_DIR/generated/update-rollback.env"
 grep -q '^image tag sha256:current vless-reality-site-rollback:caddy$' "$update_log"
 grep -q '^CADDY_IMAGE=caddy:2.12.0-alpine$' "$TEST_DIR/.env"
-grep -q '^XRAY_IMAGE=ghcr.io/xtls/xray-core:26.9.8$' "$TEST_DIR/.env"
+grep -q '^XRAY_IMAGE=ghcr.io/xtls/xray-core:26.10.1$' "$TEST_DIR/.env"
 
 printf 'yes\n' | env FAKE_DOCKER_LOG="$update_log" \
   "$TEST_DIR/manage.sh" rollback >"$TEST_DIR/rollback-applied.log"
 grep -q 'Service image rollback applied' "$TEST_DIR/rollback-applied.log"
 grep -q '^up up -d --no-deps --force-recreate caddy xray$' "$update_log"
 grep -q '^CADDY_IMAGE=caddy:2.11.4-alpine$' "$TEST_DIR/.env"
-grep -q '^XRAY_IMAGE=ghcr.io/xtls/xray-core:26.7.11$' "$TEST_DIR/.env"
+grep -q '^XRAY_IMAGE=ghcr.io/xtls/xray-core:26.9.9$' "$TEST_DIR/.env"
 
 "$TEST_DIR/manage.sh" backup >/dev/null
 

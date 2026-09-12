@@ -8,7 +8,7 @@ case "$url" in
     version="${FAKE_CADDY_LATEST:-2.11.4}"
     ;;
   */repos/XTLS/Xray-core/releases\?per_page=1)
-    version="${FAKE_XRAY_LATEST:-26.7.11}"
+    version="${FAKE_XRAY_LATEST:-26.9.9}"
     ;;
   */repos/vikiboss/60s/releases/latest)
     version="${FAKE_SIXTY_SECONDS_LATEST:-2.54.0}"

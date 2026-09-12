@@ -87,7 +87,7 @@ load_env() {
   RELAY_ADDRESS="${RELAY_ADDRESS:-}"
   RELAY_PORT="${RELAY_PORT:-443}"
   ENABLE_60S="${ENABLE_60S:-true}"
-  XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.7.11}"
+  XRAY_IMAGE="${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.9.9}"
   CADDY_IMAGE="${CADDY_IMAGE:-caddy:2.11.4-alpine}"
   SIXTY_SECONDS_IMAGE="${SIXTY_SECONDS_IMAGE:-vikiboss/60s:2.54.0}"
   LOG_MAX_SIZE="${LOG_MAX_SIZE:-10m}"

@@ -91,7 +91,7 @@ services:
       start_period: 10s
 
   xray:
-    image: "${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.7.11}"
+    image: "${XRAY_IMAGE:-ghcr.io/xtls/xray-core:26.9.9}"
     command: ["run", "-config", "/usr/local/etc/xray/config.json"]
     restart: unless-stopped
     depends_on:
