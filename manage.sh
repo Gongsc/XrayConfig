@@ -38,7 +38,7 @@ Commands:
   down              Stop the stack without deleting certificates
   restart           Restart active services
   status            Show container status
-  check-updates     Check configured service images and ask before applying updates
+  check-updates     Check latest releases and ask before updating .env
   rollback          Roll back the most recently backed-up service image update
   logs [service]    Follow logs (service: caddy, xray, news-api or network-check)
   show-client       Print the generated VLESS import link
@@ -150,86 +150,197 @@ require_docker() {
   docker info >/dev/null 2>&1 || die "Docker daemon is not available to the current user."
 }
 
-short_image_id() {
-  local image_id="$1"
+fetch_latest_release_version() {
+  local repository="$1"
+  local include_prereleases="${2:-false}"
+  local endpoint="releases/latest"
+  local response tag
 
-  image_id="${image_id#sha256:}"
-  printf 'sha256:%.12s' "$image_id"
+  if [[ "$include_prereleases" == "true" ]]; then
+    endpoint='releases?per_page=1'
+  fi
+
+  response="$(curl --fail --silent --show-error --location \
+    --connect-timeout 10 --max-time 30 \
+    -H 'Accept: application/vnd.github+json' \
+    "${RELEASE_API_BASE:-https://api.github.com}/repos/$repository/$endpoint")" || return 1
+  tag="$(sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' <<<"$response" | head -n 1)"
+  tag="${tag#v}"
+  [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  printf '%s' "$tag"
+}
+
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  local env_tmp="$ROOT_DIR/.env.tmp"
+  local env_mode
+
+  if env_mode="$(stat -c '%a' "$ROOT_DIR/.env" 2>/dev/null)"; then
+    :
+  else
+    env_mode="$(stat -f '%Lp' "$ROOT_DIR/.env")"
+  fi
+
+  awk -v key="$key" -v value="$value" '
+    BEGIN { found = 0 }
+    index($0, key "=") == 1 {
+      if (!found) print key "=" value
+      found = 1
+      next
+    }
+    { print }
+    END { if (!found) print key "=" value }
+  ' "$ROOT_DIR/.env" >"$env_tmp"
+  chmod "$env_mode" "$env_tmp"
+  mv "$env_tmp" "$ROOT_DIR/.env"
+}
+
+image_version() {
+  local service="$1"
+  local image="$2"
+  local version
+
+  case "$service:$image" in
+    caddy:caddy:*-alpine) image="${image#caddy:}"; version="${image%-alpine}" ;;
+    xray:ghcr.io/xtls/xray-core:*) version="${image##*:}" ;;
+    news-api:vikiboss/60s:*) version="${image##*:}" ;;
+    *) return 1 ;;
+  esac
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  printf '%s' "$version"
+}
+
+version_is_newer() {
+  local candidate="$1"
+  local current="$2"
+  local candidate_part current_part index
+  local -a candidate_parts=()
+  local -a current_parts=()
+
+  IFS=. read -r -a candidate_parts <<<"$candidate"
+  IFS=. read -r -a current_parts <<<"$current"
+  for index in 0 1 2; do
+    candidate_part=$((10#${candidate_parts[$index]}))
+    current_part=$((10#${current_parts[$index]}))
+    ((candidate_part > current_part)) && return 0
+    ((candidate_part < current_part)) && return 1
+  done
+  return 1
 }
 
 check_service_updates() {
-  local answer backup_answer backup_image container_id current_id latest_id service image index
+  local mode="${1:-normal}"
+  local answer backup_answer backup_image container_id current_id service image index
   local rollback_timestamp rollback_tmp
+  local current_version latest_version xray_version caddy_version sixty_seconds_version
   local -a services=()
-  local -a images=()
+  local -a env_keys=()
+  local -a current_images=()
+  local -a latest_images=()
   local -a updated_services=()
-  local -a updated_images=()
+  local -a updated_env_keys=()
+  local -a old_images=()
+  local -a new_images=()
   local -a current_ids=()
-  local -a latest_ids=()
+  local -a deployed_services=()
 
   load_env
   require_docker
+  require_command curl
 
   services=(caddy xray)
-  images=("$CADDY_IMAGE" "$XRAY_IMAGE")
+  env_keys=(CADDY_IMAGE XRAY_IMAGE)
+  current_images=("$CADDY_IMAGE" "$XRAY_IMAGE")
+
+  info "Checking the latest releases independently of the versions pinned in .env..."
+  if ! caddy_version="$(fetch_latest_release_version caddyserver/caddy)"; then
+    if [[ "$mode" == "initial" ]]; then
+      warn "Could not check the latest Caddy release; continuing with the version in .env."
+      return
+    fi
+    die "Could not determine the latest Caddy release."
+  fi
+  # Xray publishes current builds as GitHub pre-releases, so use its newest
+  # release entry instead of the /releases/latest endpoint that omits them.
+  if ! xray_version="$(fetch_latest_release_version XTLS/Xray-core true)"; then
+    if [[ "$mode" == "initial" ]]; then
+      warn "Could not check the latest Xray release; continuing with the version in .env."
+      return
+    fi
+    die "Could not determine the latest Xray release."
+  fi
+  latest_images=("caddy:${caddy_version}-alpine" "ghcr.io/xtls/xray-core:$xray_version")
 
   if [[ "$ENABLE_60S" == "true" ]]; then
     services+=(news-api)
-    images+=("$SIXTY_SECONDS_IMAGE")
+    env_keys+=(SIXTY_SECONDS_IMAGE)
+    current_images+=("$SIXTY_SECONDS_IMAGE")
+    if ! sixty_seconds_version="$(fetch_latest_release_version vikiboss/60s)"; then
+      if [[ "$mode" == "initial" ]]; then
+        warn "Could not check the latest 60s release; continuing with the versions in .env."
+        return
+      fi
+      die "Could not determine the latest 60s release."
+    fi
+    latest_images+=("vikiboss/60s:$sixty_seconds_version")
   fi
 
-  info "Checking configured images for updates..."
-  "${COMPOSE[@]}" pull "${services[@]}"
-
   for index in "${!services[@]}"; do
-    service="${services[$index]}"
-    image="${images[$index]}"
-    container_id="$("${COMPOSE[@]}" ps --all --quiet "$service" 2>/dev/null | head -n 1)"
-    if [[ -z "$container_id" ]]; then
-      info "Skipping $service: no existing container. The image is ready for the next './manage.sh up'."
-      continue
-    fi
-
-    current_id="$(docker inspect --format '{{.Image}}' "$container_id" 2>/dev/null)" || \
-      die "Could not inspect the current $service container."
-    latest_id="$(docker image inspect --format '{{.Id}}' "$image" 2>/dev/null)" || \
-      die "Could not inspect the pulled image for $service ($image)."
-
-    if [[ "$current_id" != "$latest_id" ]]; then
-      updated_services+=("$service")
-      updated_images+=("$image")
-      current_ids+=("$current_id")
-      latest_ids+=("$latest_id")
+    latest_version="$(image_version "${services[$index]}" "${latest_images[$index]}")"
+    current_version=""
+    image_version "${services[$index]}" "${current_images[$index]}" >/dev/null 2>&1 && \
+      current_version="$(image_version "${services[$index]}" "${current_images[$index]}")"
+    if [[ -z "$current_version" ]] || version_is_newer "$latest_version" "$current_version"; then
+      updated_services+=("${services[$index]}")
+      updated_env_keys+=("${env_keys[$index]}")
+      old_images+=("${current_images[$index]}")
+      new_images+=("${latest_images[$index]}")
     fi
   done
 
   if ((${#updated_services[@]} == 0)); then
-    info "All deployed services use the latest image for their configured tag."
+    info "All enabled services are pinned to their latest release."
     return
   fi
 
   printf '\nUpdates are available:\n'
   for index in "${!updated_services[@]}"; do
-    printf '  %-10s %s  %s -> %s\n' \
-      "${updated_services[$index]}" \
-      "${updated_images[$index]}" \
-      "$(short_image_id "${current_ids[$index]}")" \
-      "$(short_image_id "${latest_ids[$index]}")"
+    printf '  %-10s %s -> %s\n' "${updated_services[$index]}" \
+      "${old_images[$index]}" "${new_images[$index]}"
   done
-  printf '\nApply these updates and recreate the listed services? [y/N] '
+  if [[ "$mode" == "initial" ]]; then
+    printf '\nUse these latest versions for the first deployment? [y/N] '
+  else
+    printf '\nUpdate .env and recreate the deployed services listed above? [y/N] '
+  fi
   if ! IFS= read -r answer; then
     answer=""
   fi
   case "${answer,,}" in
     y|yes)
+      if [[ "$mode" == "initial" ]]; then
+        for index in "${!updated_services[@]}"; do
+          set_env_value "${updated_env_keys[$index]}" "${new_images[$index]}"
+        done
+        load_env
+        info "The first deployment will use the selected latest service versions."
+        return
+      fi
+
       load_credentials
       render_files
-      info "Validating configuration before applying updates..."
-      "${COMPOSE[@]}" config --quiet
-      "${COMPOSE[@]}" run --rm --no-deps --entrypoint caddy caddy \
-        validate --config /etc/caddy/Caddyfile --adapter caddyfile
-      "${COMPOSE[@]}" run --rm --no-deps xray \
-        run -test -config /usr/local/etc/xray/config.json
+      for index in "${!updated_services[@]}"; do
+        service="${updated_services[$index]}"
+        container_id="$("${COMPOSE[@]}" ps --all --quiet "$service" 2>/dev/null | head -n 1)"
+        current_id=""
+        if [[ -n "$container_id" ]]; then
+          current_id="$(docker inspect --format '{{.Image}}' "$container_id" 2>/dev/null)" || \
+            die "Could not inspect the current $service container."
+          deployed_services+=("$service")
+        fi
+        current_ids+=("$current_id")
+      done
 
       printf 'Create an automatic configuration and image backup for rollback? [Y/n] '
       if ! IFS= read -r backup_answer; then
@@ -247,11 +358,15 @@ check_service_updates() {
           } >"$rollback_tmp"
           for index in "${!updated_services[@]}"; do
             service="${updated_services[$index]}"
-            backup_image="vless-reality-site-rollback:$service"
-            docker image tag "${current_ids[$index]}" "$backup_image"
+            backup_image=""
+            if [[ -n "${current_ids[$index]}" ]]; then
+              backup_image="vless-reality-site-rollback:$service"
+              docker image tag "${current_ids[$index]}" "$backup_image"
+            fi
             {
               printf 'ROLLBACK_SERVICE_%d=%q\n' "$index" "$service"
-              printf 'ROLLBACK_IMAGE_%d=%q\n' "$index" "${updated_images[$index]}"
+              printf 'ROLLBACK_ENV_KEY_%d=%q\n' "$index" "${updated_env_keys[$index]}"
+              printf 'ROLLBACK_IMAGE_%d=%q\n' "$index" "${old_images[$index]}"
               printf 'ROLLBACK_BACKUP_IMAGE_%d=%q\n' "$index" "$backup_image"
             } >>"$rollback_tmp"
           done
@@ -268,22 +383,43 @@ check_service_updates() {
           ;;
       esac
 
-      "${COMPOSE[@]}" up -d --no-deps "${updated_services[@]}"
-      "${COMPOSE[@]}" ps "${updated_services[@]}"
+      for index in "${!updated_services[@]}"; do
+        set_env_value "${updated_env_keys[$index]}" "${new_images[$index]}"
+      done
+      load_env
+      "${COMPOSE[@]}" pull "${updated_services[@]}"
+      info "Validating configuration with the latest service versions..."
+      "${COMPOSE[@]}" config --quiet
+      "${COMPOSE[@]}" run --rm --no-deps --entrypoint caddy caddy \
+        validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      "${COMPOSE[@]}" run --rm --no-deps xray \
+        run -test -config /usr/local/etc/xray/config.json
+      if ((${#deployed_services[@]} > 0)); then
+        "${COMPOSE[@]}" up -d --no-deps "${deployed_services[@]}"
+        "${COMPOSE[@]}" ps "${deployed_services[@]}"
+      else
+        info "No affected containers are currently deployed; the new versions will be used by the next './manage.sh up'."
+      fi
       info "Selected service updates applied."
       ;;
     *)
-      info "Update cancelled. Running containers were not changed."
+      if [[ "$mode" == "initial" ]]; then
+        info "Latest versions declined. The first deployment will keep the versions pinned in .env."
+      else
+        info "Update cancelled. .env and running containers were not changed."
+      fi
       ;;
   esac
 }
 
 rollback_service_update() {
-  local answer backup_image image service index
-  local service_var image_var backup_var
+  local answer backup_image env_key image service index
+  local service_var env_key_var image_var backup_var
   local -a services=()
+  local -a env_keys=()
   local -a images=()
   local -a backup_images=()
+  local -a deployed_services=()
 
   load_env
   require_docker
@@ -296,20 +432,32 @@ rollback_service_update() {
 
   for ((index = 0; index < ROLLBACK_COUNT; index++)); do
     service_var="ROLLBACK_SERVICE_$index"
+    env_key_var="ROLLBACK_ENV_KEY_$index"
     image_var="ROLLBACK_IMAGE_$index"
     backup_var="ROLLBACK_BACKUP_IMAGE_$index"
     service="${!service_var:-}"
+    env_key="${!env_key_var:-}"
     image="${!image_var:-}"
     backup_image="${!backup_var:-}"
     case "$service" in
       caddy|xray|news-api) ;;
       *) die "Rollback snapshot contains an invalid service." ;;
     esac
-    [[ -n "$image" && "$backup_image" == vless-reality-site-rollback:* ]] || \
+    case "$env_key" in
+      CADDY_IMAGE|XRAY_IMAGE|SIXTY_SECONDS_IMAGE) ;;
+      *) die "Rollback snapshot contains an invalid environment key." ;;
+    esac
+    [[ -n "$image" ]] || \
       die "Rollback snapshot contains an invalid image reference."
-    docker image inspect "$backup_image" >/dev/null 2>&1 || \
-      die "Rollback image is missing for $service: $backup_image"
+    if [[ -n "$backup_image" ]]; then
+      [[ "$backup_image" == vless-reality-site-rollback:* ]] || \
+        die "Rollback snapshot contains an invalid backup image reference."
+      docker image inspect "$backup_image" >/dev/null 2>&1 || \
+        die "Rollback image is missing for $service: $backup_image"
+      deployed_services+=("$service")
+    fi
     services+=("$service")
+    env_keys+=("$env_key")
     images+=("$image")
     backup_images+=("$backup_image")
   done
@@ -325,18 +473,24 @@ rollback_service_update() {
   case "${answer,,}" in
     y|yes)
       load_credentials
-      render_files
       for index in "${!services[@]}"; do
-        docker image tag "${backup_images[$index]}" "${images[$index]}"
+        set_env_value "${env_keys[$index]}" "${images[$index]}"
+        if [[ -n "${backup_images[$index]}" ]]; then
+          docker image tag "${backup_images[$index]}" "${images[$index]}"
+        fi
       done
+      load_env
+      render_files
       info "Validating configuration with the rollback images..."
       "${COMPOSE[@]}" config --quiet
       "${COMPOSE[@]}" run --rm --no-deps --entrypoint caddy caddy \
         validate --config /etc/caddy/Caddyfile --adapter caddyfile
       "${COMPOSE[@]}" run --rm --no-deps xray \
         run -test -config /usr/local/etc/xray/config.json
-      "${COMPOSE[@]}" up -d --no-deps --force-recreate "${services[@]}"
-      "${COMPOSE[@]}" ps "${services[@]}"
+      if ((${#deployed_services[@]} > 0)); then
+        "${COMPOSE[@]}" up -d --no-deps --force-recreate "${deployed_services[@]}"
+        "${COMPOSE[@]}" ps "${deployed_services[@]}"
+      fi
       info "Service image rollback applied."
       ;;
     *) info "Rollback cancelled. Running containers were not changed." ;;
@@ -557,6 +711,10 @@ generate_credentials() {
 initialize() {
   load_env
   require_docker
+  if [[ ! -f "$CREDENTIALS_FILE" ]]; then
+    check_service_updates initial
+    load_env
+  fi
   check_ports
   check_dns
 
