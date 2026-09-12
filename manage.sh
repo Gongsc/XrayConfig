@@ -8,6 +8,7 @@ XRAY_DIR="$GENERATED_DIR/xray"
 CREDENTIALS_FILE="$GENERATED_DIR/credentials.env"
 CLIENT_FILE="$GENERATED_DIR/client.txt"
 CADDY_FILE="$GENERATED_DIR/Caddyfile"
+ROLLBACK_FILE="$GENERATED_DIR/update-rollback.env"
 COMPOSE=()
 COMPOSE_ALL=()
 
@@ -36,6 +37,8 @@ Commands:
   down              Stop the stack without deleting certificates
   restart           Restart active services
   status            Show container status
+  check-updates     Check configured service images and ask before applying updates
+  rollback          Roll back the most recently backed-up service image update
   logs [service]    Follow logs (service: caddy, xray, news-api or network-check)
   show-client       Print the generated VLESS import link
   backup            Create a private backup archive under backups/
@@ -143,6 +146,199 @@ require_docker() {
   require_command docker
   docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required."
   docker info >/dev/null 2>&1 || die "Docker daemon is not available to the current user."
+}
+
+short_image_id() {
+  local image_id="$1"
+
+  image_id="${image_id#sha256:}"
+  printf 'sha256:%.12s' "$image_id"
+}
+
+check_service_updates() {
+  local answer backup_answer backup_image container_id current_id latest_id service image index
+  local rollback_timestamp rollback_tmp
+  local -a services=()
+  local -a images=()
+  local -a updated_services=()
+  local -a updated_images=()
+  local -a current_ids=()
+  local -a latest_ids=()
+
+  load_env
+  require_docker
+
+  services=(caddy xray)
+  images=("$CADDY_IMAGE" "$XRAY_IMAGE")
+
+  if [[ "$ENABLE_60S" == "true" ]]; then
+    services+=(news-api)
+    images+=("$SIXTY_SECONDS_IMAGE")
+  fi
+
+  info "Checking configured images for updates..."
+  "${COMPOSE[@]}" pull "${services[@]}"
+
+  for index in "${!services[@]}"; do
+    service="${services[$index]}"
+    image="${images[$index]}"
+    container_id="$("${COMPOSE[@]}" ps --all --quiet "$service" 2>/dev/null | head -n 1)"
+    if [[ -z "$container_id" ]]; then
+      info "Skipping $service: no existing container. The image is ready for the next './manage.sh up'."
+      continue
+    fi
+
+    current_id="$(docker inspect --format '{{.Image}}' "$container_id" 2>/dev/null)" || \
+      die "Could not inspect the current $service container."
+    latest_id="$(docker image inspect --format '{{.Id}}' "$image" 2>/dev/null)" || \
+      die "Could not inspect the pulled image for $service ($image)."
+
+    if [[ "$current_id" != "$latest_id" ]]; then
+      updated_services+=("$service")
+      updated_images+=("$image")
+      current_ids+=("$current_id")
+      latest_ids+=("$latest_id")
+    fi
+  done
+
+  if ((${#updated_services[@]} == 0)); then
+    info "All deployed services use the latest image for their configured tag."
+    return
+  fi
+
+  printf '\nUpdates are available:\n'
+  for index in "${!updated_services[@]}"; do
+    printf '  %-10s %s  %s -> %s\n' \
+      "${updated_services[$index]}" \
+      "${updated_images[$index]}" \
+      "$(short_image_id "${current_ids[$index]}")" \
+      "$(short_image_id "${latest_ids[$index]}")"
+  done
+  printf '\nApply these updates and recreate the listed services? [y/N] '
+  if ! IFS= read -r answer; then
+    answer=""
+  fi
+  case "${answer,,}" in
+    y|yes)
+      load_credentials
+      render_files
+      info "Validating configuration before applying updates..."
+      "${COMPOSE[@]}" config --quiet
+      "${COMPOSE[@]}" run --rm --no-deps --entrypoint caddy caddy \
+        validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      "${COMPOSE[@]}" run --rm --no-deps xray \
+        run -test -config /usr/local/etc/xray/config.json
+
+      printf 'Create an automatic configuration and image backup for rollback? [Y/n] '
+      if ! IFS= read -r backup_answer; then
+        backup_answer=""
+      fi
+      case "${backup_answer,,}" in
+        ''|y|yes)
+          backup_state
+          rollback_timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
+          rollback_tmp="$ROLLBACK_FILE.tmp"
+          umask 077
+          {
+            printf 'ROLLBACK_CREATED_AT=%q\n' "$rollback_timestamp"
+            printf 'ROLLBACK_COUNT=%q\n' "${#updated_services[@]}"
+          } >"$rollback_tmp"
+          for index in "${!updated_services[@]}"; do
+            service="${updated_services[$index]}"
+            backup_image="vless-reality-site-rollback:$service"
+            docker image tag "${current_ids[$index]}" "$backup_image"
+            {
+              printf 'ROLLBACK_SERVICE_%d=%q\n' "$index" "$service"
+              printf 'ROLLBACK_IMAGE_%d=%q\n' "$index" "${updated_images[$index]}"
+              printf 'ROLLBACK_BACKUP_IMAGE_%d=%q\n' "$index" "$backup_image"
+            } >>"$rollback_tmp"
+          done
+          mv "$rollback_tmp" "$ROLLBACK_FILE"
+          chmod 600 "$ROLLBACK_FILE"
+          info "Rollback snapshot saved. Use './manage.sh rollback' to restore it."
+          ;;
+        *)
+          if [[ -f "$ROLLBACK_FILE" ]]; then
+            rollback_timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
+            mv "$ROLLBACK_FILE" "$ROLLBACK_FILE.superseded-$rollback_timestamp"
+          fi
+          warn "Automatic backup skipped; this update cannot be rolled back with './manage.sh rollback'."
+          ;;
+      esac
+
+      "${COMPOSE[@]}" up -d --no-deps "${updated_services[@]}"
+      "${COMPOSE[@]}" ps "${updated_services[@]}"
+      info "Selected service updates applied."
+      ;;
+    *)
+      info "Update cancelled. Running containers were not changed."
+      ;;
+  esac
+}
+
+rollback_service_update() {
+  local answer backup_image image service index
+  local service_var image_var backup_var
+  local -a services=()
+  local -a images=()
+  local -a backup_images=()
+
+  load_env
+  require_docker
+  [[ -f "$ROLLBACK_FILE" ]] || \
+    die "No rollback snapshot is available. Enable automatic backup when applying an update."
+
+  # shellcheck disable=SC1090
+  source "$ROLLBACK_FILE"
+  [[ "${ROLLBACK_COUNT:-}" =~ ^[1-9][0-9]*$ ]] || die "Rollback snapshot is invalid."
+
+  for ((index = 0; index < ROLLBACK_COUNT; index++)); do
+    service_var="ROLLBACK_SERVICE_$index"
+    image_var="ROLLBACK_IMAGE_$index"
+    backup_var="ROLLBACK_BACKUP_IMAGE_$index"
+    service="${!service_var:-}"
+    image="${!image_var:-}"
+    backup_image="${!backup_var:-}"
+    case "$service" in
+      caddy|xray|news-api) ;;
+      *) die "Rollback snapshot contains an invalid service." ;;
+    esac
+    [[ -n "$image" && "$backup_image" == vless-reality-site-rollback:* ]] || \
+      die "Rollback snapshot contains an invalid image reference."
+    docker image inspect "$backup_image" >/dev/null 2>&1 || \
+      die "Rollback image is missing for $service: $backup_image"
+    services+=("$service")
+    images+=("$image")
+    backup_images+=("$backup_image")
+  done
+
+  printf 'Rollback snapshot from %s contains:\n' "${ROLLBACK_CREATED_AT:-unknown time}"
+  for index in "${!services[@]}"; do
+    printf '  %-10s %s\n' "${services[$index]}" "${images[$index]}"
+  done
+  printf '\nRestore these service images and recreate the listed services? [y/N] '
+  if ! IFS= read -r answer; then
+    answer=""
+  fi
+  case "${answer,,}" in
+    y|yes)
+      load_credentials
+      render_files
+      for index in "${!services[@]}"; do
+        docker image tag "${backup_images[$index]}" "${images[$index]}"
+      done
+      info "Validating configuration with the rollback images..."
+      "${COMPOSE[@]}" config --quiet
+      "${COMPOSE[@]}" run --rm --no-deps --entrypoint caddy caddy \
+        validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      "${COMPOSE[@]}" run --rm --no-deps xray \
+        run -test -config /usr/local/etc/xray/config.json
+      "${COMPOSE[@]}" up -d --no-deps --force-recreate "${services[@]}"
+      "${COMPOSE[@]}" ps "${services[@]}"
+      info "Service image rollback applied."
+      ;;
+    *) info "Rollback cancelled. Running containers were not changed." ;;
+  esac
 }
 
 compose_is_running() {
@@ -421,7 +617,7 @@ start_stack() {
 }
 
 backup_state() {
-  local timestamp archive
+  local timestamp archive sequence
 
   load_env
   load_credentials
@@ -429,6 +625,11 @@ backup_state() {
   timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
   mkdir -p "$ROOT_DIR/backups"
   archive="$ROOT_DIR/backups/vless-reality-$timestamp.tar.gz"
+  sequence=1
+  while [[ -e "$archive" ]]; do
+    archive="$ROOT_DIR/backups/vless-reality-$timestamp-$sequence.tar.gz"
+    sequence=$((sequence + 1))
+  done
   tar -C "$ROOT_DIR" -czf "$archive" generated .env
   chmod 600 "$archive"
   info "Private backup created: $archive"
@@ -477,6 +678,8 @@ main() {
       require_docker
       "${COMPOSE[@]}" ps
       ;;
+    check-updates|update) check_service_updates ;;
+    rollback) rollback_service_update ;;
     logs)
       load_env
       require_docker

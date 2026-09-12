@@ -116,6 +116,29 @@ grep -Eq '^vless://11111111-2222-4333-8444-555555555555@node\.example\.com:443\?
 
 "$TEST_DIR/manage.sh" validate >/dev/null
 "$TEST_DIR/manage.sh" up >/dev/null
+"$TEST_DIR/manage.sh" check-updates >/dev/null
+
+update_log="$TEST_DIR/update-docker.log"
+printf 'n\n' | env FAKE_UPDATE_AVAILABLE=true FAKE_DOCKER_LOG="$update_log" \
+  "$TEST_DIR/manage.sh" check-updates >"$TEST_DIR/update-cancelled.log"
+grep -q '^Updates are available:$' "$TEST_DIR/update-cancelled.log"
+grep -q 'caddy.*sha256:curr.*sha256:late' "$TEST_DIR/update-cancelled.log"
+grep -q 'Update cancelled' "$TEST_DIR/update-cancelled.log"
+[[ ! -e "$update_log" ]]
+
+printf 'yes\nyes\n' | env FAKE_UPDATE_AVAILABLE=true FAKE_DOCKER_LOG="$update_log" \
+  "$TEST_DIR/manage.sh" check-updates >"$TEST_DIR/update-applied.log"
+grep -q 'Selected service updates applied' "$TEST_DIR/update-applied.log"
+grep -q '^up up -d --no-deps caddy xray$' "$update_log"
+[[ -f "$TEST_DIR/generated/update-rollback.env" ]]
+grep -q '^ROLLBACK_COUNT=2$' "$TEST_DIR/generated/update-rollback.env"
+grep -q '^image tag sha256:current vless-reality-site-rollback:caddy$' "$update_log"
+
+printf 'yes\n' | env FAKE_DOCKER_LOG="$update_log" \
+  "$TEST_DIR/manage.sh" rollback >"$TEST_DIR/rollback-applied.log"
+grep -q 'Service image rollback applied' "$TEST_DIR/rollback-applied.log"
+grep -q '^up up -d --no-deps --force-recreate caddy xray$' "$update_log"
+
 "$TEST_DIR/manage.sh" backup >/dev/null
 
 ruby -pi -e 'gsub(/^RELAY_ADDRESS=.*/, "RELAY_ADDRESS=https://relay.example.net")' "$TEST_DIR/.env"
@@ -125,7 +148,7 @@ if "$TEST_DIR/manage.sh" init >"$TEST_DIR/invalid-relay.log" 2>&1; then
 fi
 grep -q 'RELAY_ADDRESS must be a hostname' "$TEST_DIR/invalid-relay.log"
 
-[[ "$(find "$TEST_DIR/backups" -name '*.tar.gz' | wc -l | tr -d ' ')" == "1" ]]
+[[ "$(find "$TEST_DIR/backups" -name '*.tar.gz' | wc -l | tr -d ' ')" == "2" ]]
 
 file_mode() {
   if stat -c '%a' "$1" >/dev/null 2>&1; then

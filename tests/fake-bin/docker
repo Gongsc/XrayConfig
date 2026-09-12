@@ -6,6 +6,27 @@ if [[ "${1:-}" == "info" ]]; then
   exit 0
 fi
 
+if [[ "${1:-}" == "inspect" ]]; then
+  printf '%s\n' 'sha256:current'
+  exit 0
+fi
+
+if [[ "${1:-}" == "image" && "${2:-}" == "inspect" ]]; then
+  if [[ "${FAKE_UPDATE_AVAILABLE:-false}" == "true" ]]; then
+    printf '%s\n' 'sha256:latest'
+  else
+    printf '%s\n' 'sha256:current'
+  fi
+  exit 0
+fi
+
+if [[ "${1:-}" == "image" && "${2:-}" == "tag" ]]; then
+  if [[ -n "${FAKE_DOCKER_LOG:-}" ]]; then
+    printf '%s\n' "image tag ${*:3}" >>"$FAKE_DOCKER_LOG"
+  fi
+  exit 0
+fi
+
 if [[ "${1:-}" == "run" ]]; then
   case "${*: -1}" in
     uuid)
@@ -49,9 +70,20 @@ done
 
 case "${1:-}" in
   ps)
+    if [[ "${FAKE_UPDATE_AVAILABLE:-false}" == "true" ]]; then
+      case "${*: -1}" in
+        caddy|xray|news-api) printf '%s\n' "fake-${*: -1}-container" ;;
+      esac
+    fi
     exit 0
     ;;
-  config|run|up|down|restart|logs)
+  up)
+    if [[ -n "${FAKE_DOCKER_LOG:-}" ]]; then
+      printf '%s\n' "up $*" >>"$FAKE_DOCKER_LOG"
+    fi
+    exit 0
+    ;;
+  config|run|down|restart|logs|pull)
     exit 0
     ;;
   *)
