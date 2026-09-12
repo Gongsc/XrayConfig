@@ -126,6 +126,14 @@ sysctl net.ipv4.tcp_available_congestion_control
    ./manage.sh show-client
    ```
 
+   Mihomo 用户应使用生成的代理配置片段，以启用分享链接无法携带的 ML-KEM 兼容选项：
+
+   ```bash
+   ./manage.sh show-mihomo
+   ```
+
+   该命令输出 `generated/mihomo.yaml`。配置固定使用 `client-fingerprint: chrome`，并在 `reality-opts` 下设置 `support-x25519mlkem768: true`；可将 `proxies` 中的节点合并到现有 Mihomo 配置。该字段是 Mihomo 专用选项，无法通过 `vless://` 分享链接携带，详见 [MetaCubeX/mihomo#3193](https://github.com/MetaCubeX/mihomo/issues/3193)。
+
    链接包含以下参数：
 
    - 地址：配置中转时为 `RELAY_ADDRESS`，否则为 `DOMAIN`
@@ -292,7 +300,7 @@ Docker `local` 驱动的轮转参数参见[官方文档](https://docs.docker.com
 ./manage.sh rotate --yes
 ```
 
-轮换会先生成私密备份，然后替换 UUID、X25519 密钥和 short ID。所有旧客户端会立即断开，必须重新导入 `show-client` 输出的新链接。上一次的凭据文件还会暂存在 `generated/credentials.env.previous`；下一次轮换前请按自己的回滚策略妥善处理。
+轮换会先生成私密备份，然后替换 UUID、X25519 密钥和 short ID。所有旧客户端会立即断开，必须重新导入 `show-client` 输出的新链接或 `show-mihomo` 输出的新配置。上一次的凭据文件还会暂存在 `generated/credentials.env.previous`；下一次轮换前请按自己的回滚策略妥善处理。
 
 ### 升级镜像
 
@@ -335,6 +343,7 @@ docker compose --env-file .env pull
 - `generated/credentials.env`：服务端身份凭据，权限 `0600`。
 - `generated/xray/config.json`：包含 REALITY 私钥，权限 `0644`，供官方镜像中的非 root Xray 进程读取；宿主机上的父目录 `generated/` 与 `generated/xray/` 均为 `0700`，其他宿主机用户无法穿过目录读取该文件。
 - `generated/client.txt`：可导入客户端的分享链接，权限 `0600`。
+- `generated/mihomo.yaml`：Mihomo VLESS + REALITY 代理配置片段，默认启用 `support-x25519mlkem768`，权限 `0600`。
 - `generated/Caddyfile`：渲染后的站点配置，不含 REALITY 密钥。
 
 `generated/`、`.env`、`backups/` 已加入 `.gitignore`。不要将这些文件发送到公开仓库、工单或聊天记录。

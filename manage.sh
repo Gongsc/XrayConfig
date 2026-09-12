@@ -7,6 +7,7 @@ GENERATED_DIR="$ROOT_DIR/generated"
 XRAY_DIR="$GENERATED_DIR/xray"
 CREDENTIALS_FILE="$GENERATED_DIR/credentials.env"
 CLIENT_FILE="$GENERATED_DIR/client.txt"
+MIHOMO_FILE="$GENERATED_DIR/mihomo.yaml"
 CADDY_FILE="$GENERATED_DIR/Caddyfile"
 ROLLBACK_FILE="$GENERATED_DIR/update-rollback.env"
 COMPOSE=()
@@ -41,6 +42,7 @@ Commands:
   rollback          Roll back the most recently backed-up service image update
   logs [service]    Follow logs (service: caddy, xray, news-api or network-check)
   show-client       Print the generated VLESS import link
+  show-mihomo       Print the generated Mihomo proxy configuration
   backup            Create a private backup archive under backups/
   rotate --yes      Back up and replace UUID, Reality keys and short ID
 EOF
@@ -410,6 +412,13 @@ url_encode() {
   printf '%s' "$output"
 }
 
+yaml_single_quote() {
+  local input="$1"
+
+  input="${input//\'/\'\'}"
+  printf "'%s'" "$input"
+}
+
 load_credentials() {
   [[ -f "$CREDENTIALS_FILE" ]] || die "Credentials are missing. Run: ./manage.sh init"
   # shellcheck disable=SC1090
@@ -424,6 +433,7 @@ load_credentials() {
 render_files() {
   local acme_email_option=""
   local client_address="$DOMAIN"
+  local client_uri_address="$DOMAIN"
   local client_label
   local client_port=443
   local site_root="/srv/static"
@@ -473,19 +483,40 @@ render_files() {
   client_label="$(url_encode "$CLIENT_NAME")"
   if [[ -n "$RELAY_ADDRESS" ]]; then
     client_address="$RELAY_ADDRESS"
+    client_uri_address="$RELAY_ADDRESS"
     client_port="$RELAY_PORT"
-    if [[ "$client_address" == *":"* ]]; then
-      client_address="[$client_address]"
+    if [[ "$client_uri_address" == *":"* ]]; then
+      client_uri_address="[$client_uri_address]"
     fi
   fi
   printf '%s\n' \
-    "vless://${UUID}@${client_address}:${client_port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${DOMAIN}&fp=chrome&pbk=${REALITY_PASSWORD}&sid=${SHORT_ID}&type=tcp#${client_label}" \
+    "vless://${UUID}@${client_uri_address}:${client_port}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${DOMAIN}&fp=chrome&pbk=${REALITY_PASSWORD}&sid=${SHORT_ID}&type=tcp#${client_label}" \
     >"$CLIENT_FILE"
+
+  {
+    printf '%s\n' 'proxies:'
+    printf '  - name: %s\n' "$(yaml_single_quote "$CLIENT_NAME")"
+    printf '%s\n' '    type: vless'
+    printf '    server: %s\n' "$(yaml_single_quote "$client_address")"
+    printf '    port: %s\n' "$client_port"
+    printf '    uuid: %s\n' "$(yaml_single_quote "$UUID")"
+    printf '%s\n' '    encryption: none'
+    printf '%s\n' '    network: tcp'
+    printf '%s\n' '    udp: true'
+    printf '%s\n' '    tls: true'
+    printf '%s\n' '    flow: xtls-rprx-vision'
+    printf '    servername: %s\n' "$(yaml_single_quote "$DOMAIN")"
+    printf '%s\n' '    client-fingerprint: chrome'
+    printf '%s\n' '    reality-opts:'
+    printf '      public-key: %s\n' "$(yaml_single_quote "$REALITY_PASSWORD")"
+    printf '      short-id: %s\n' "$(yaml_single_quote "$SHORT_ID")"
+    printf '%s\n' '      support-x25519mlkem768: true'
+  } >"$MIHOMO_FILE"
 
   # The official Xray image runs as a non-root user. The rendered config must
   # therefore be world-readable inside the bind mount. Its parent directories
   # remain mode 0700 on the host, so other host users cannot traverse to it.
-  chmod 600 "$CREDENTIALS_FILE" "$CLIENT_FILE"
+  chmod 600 "$CREDENTIALS_FILE" "$CLIENT_FILE" "$MIHOMO_FILE"
   chmod 644 "$XRAY_DIR/config.json" "$CADDY_FILE"
 }
 
@@ -614,6 +645,7 @@ start_stack() {
   fi
   info "60s news homepage: $ENABLE_60S"
   info "Client link: ./manage.sh show-client"
+  info "Mihomo configuration: ./manage.sh show-mihomo"
 }
 
 backup_state() {
@@ -651,7 +683,7 @@ rotate_credentials() {
     "${COMPOSE[@]}" up -d --force-recreate xray
   fi
 
-  info "Credentials rotated. Import the new link from './manage.sh show-client'."
+  info "Credentials rotated. Import the new configuration from './manage.sh show-client' or './manage.sh show-mihomo'."
   info "The previous credential file remains at $CREDENTIALS_FILE.previous until the next rotation."
 }
 
@@ -695,6 +727,10 @@ main() {
     show-client)
       [[ -f "$CLIENT_FILE" ]] || die "Client link is missing. Run: ./manage.sh init"
       cat "$CLIENT_FILE"
+      ;;
+    show-mihomo)
+      [[ -f "$MIHOMO_FILE" ]] || die "Mihomo configuration is missing. Run: ./manage.sh init"
+      cat "$MIHOMO_FILE"
       ;;
     backup) backup_state ;;
     rotate) rotate_credentials "${2:-}" ;;

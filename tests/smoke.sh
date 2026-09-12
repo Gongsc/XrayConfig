@@ -91,6 +91,20 @@ grep -q '一切运行正常' "$TEST_DIR/site/static/index.html"
 ! grep -q '<script' "$TEST_DIR/site/static/index.html"
 grep -Eq '^vless://11111111-2222-4333-8444-555555555555@relay\.example\.net:8443\?.*sni=node\.example\.com.*pbk=BBBB.*sid=[0-9a-f]{16}.*#Smoke%20Test$' \
   "$TEST_DIR/generated/client.txt"
+grep -q "^  - name: 'Smoke Test'$" "$TEST_DIR/generated/mihomo.yaml"
+grep -q "^    server: 'relay.example.net'$" "$TEST_DIR/generated/mihomo.yaml"
+grep -q '^    port: 8443$' "$TEST_DIR/generated/mihomo.yaml"
+grep -q '^    client-fingerprint: chrome$' "$TEST_DIR/generated/mihomo.yaml"
+grep -q '^      support-x25519mlkem768: true$' "$TEST_DIR/generated/mihomo.yaml"
+cmp -s <("$TEST_DIR/manage.sh" show-mihomo) "$TEST_DIR/generated/mihomo.yaml"
+ruby -e '
+  require "yaml"
+  proxy = YAML.safe_load(File.read(ARGV.fetch(0))).fetch("proxies").fetch(0)
+  abort "Mihomo fingerprint must be chrome" unless proxy.fetch("client-fingerprint") == "chrome"
+  reality = proxy.fetch("reality-opts")
+  abort "Mihomo ML-KEM support must default to true" unless reality.fetch("support-x25519mlkem768") == true
+  abort "Mihomo short ID must remain a string" unless reality.fetch("short-id").is_a?(String)
+' "$TEST_DIR/generated/mihomo.yaml"
 
 "$TEST_DIR/manage.sh" validate >/dev/null
 ruby -pi -e '
@@ -100,6 +114,8 @@ ruby -pi -e '
 "$TEST_DIR/manage.sh" init >/dev/null
 grep -Eq '^vless://11111111-2222-4333-8444-555555555555@\[2001:db8::5\]:2443\?.*sni=node\.example\.com' \
   "$TEST_DIR/generated/client.txt"
+grep -q "^    server: '2001:db8::5'$" "$TEST_DIR/generated/mihomo.yaml"
+grep -q '^    port: 2443$' "$TEST_DIR/generated/mihomo.yaml"
 
 ruby -pi -e '
   gsub(/^RELAY_ADDRESS=.*/, "RELAY_ADDRESS=")
@@ -163,5 +179,6 @@ file_mode() {
 [[ "$(file_mode "$TEST_DIR/generated/xray")" == "700" ]]
 [[ "$(file_mode "$TEST_DIR/generated/xray/config.json")" == "644" ]]
 [[ "$(file_mode "$TEST_DIR/generated/client.txt")" == "600" ]]
+[[ "$(file_mode "$TEST_DIR/generated/mihomo.yaml")" == "600" ]]
 
 printf '%s\n' 'Smoke tests passed.'
