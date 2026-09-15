@@ -1,6 +1,9 @@
 "use strict";
 
 const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
+const { FAMILIES, createQualityService } = require("./ip-quality");
 
 const LISTEN_PORT = 8080;
 const SCHEMA_VERSION = 3;
@@ -157,14 +160,52 @@ function publicTarget(target) {
   };
 }
 
-function createServer() {
-  return http.createServer(async (request, response) => {
+function createServer({ quality = createQualityService() } = {}) {
+  const server = http.createServer(async (request, response) => {
     if (request.url === "/health") {
       response.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
       response.end("ok\n");
       return;
     }
 
+    const url = new URL(request.url, "http://localhost");
+    if (url.pathname === "/quality/source" && request.method === "GET") {
+      const archive = path.join(__dirname, "ip-quality-source.tar.gz");
+      if (!fs.existsSync(archive)) {
+        sendJSON(response, 503, { error: "源码包未生成，请重新构建服务镜像" });
+        return;
+      }
+      response.writeHead(200, {
+        "Content-Type": "application/gzip", "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": 'attachment; filename="ip-quality-source.tar.gz"',
+      });
+      fs.createReadStream(archive).on("error", () => response.destroy()).pipe(response);
+      return;
+    }
+    if (url.pathname === "/quality") {
+      const family = url.searchParams.get("family") || "4";
+      if (!FAMILIES.has(family) || [...url.searchParams.keys()].some((key) => key !== "family") ||
+        url.searchParams.getAll("family").length > 1) {
+        sendJSON(response, 400, { error: "仅支持 IPv4、IPv6 或双栈检测" });
+        return;
+      }
+      if (request.method === "GET") sendJSON(response, 200, quality.get(family));
+      else if (request.method === "POST") {
+        if (request.headers["sec-fetch-site"] === "cross-site" ||
+          request.headers["content-type"] !== "application/json" ||
+          Number(request.headers["content-length"] || 0) !== 0 || request.headers["transfer-encoding"]) {
+          sendJSON(response, 400, { error: "不接受跨站请求或自定义检测参数" });
+          return;
+        }
+        const { statusCode, body } = quality.start(family);
+        if (statusCode === 429) response.setHeader("Retry-After", "30");
+        sendJSON(response, statusCode, body);
+      } else {
+        response.setHeader("Allow", "GET, POST");
+        sendJSON(response, 405, { error: "method not allowed" });
+      }
+      return;
+    }
     if (request.url !== "/check") {
       sendJSON(response, 404, { error: "not found" });
       return;
@@ -205,6 +246,8 @@ function createServer() {
     }
     response.end();
   });
+  server.on("close", () => quality.close());
+  return server;
 }
 
 async function runHealthcheck() {

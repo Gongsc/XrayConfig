@@ -2,6 +2,8 @@ name: vless-reality-site
 
 services:
   network-check:
+    init: true
+    pids_limit: 128
     build:
       context: ./network-check
     profiles:

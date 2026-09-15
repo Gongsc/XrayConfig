@@ -12,9 +12,38 @@
 ACME CA ── HTTP :80 ───────────────────────────────────────── Caddy :8080
 ```
 
-公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认网站可通过顶部导航在“60 秒读世界”和“网络延迟”之间切换；网络检测按国家和地区展示固定的门户、新闻、流媒体及社交站点。每个站点连续检测 5 次，并以成功样本的平均耗时作为结果；接口不接受用户提供的目标地址。关闭 60s 功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 和网络检测服务都只接入内部 Docker 网络，不发布宿主机端口。
+公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认网站可通过顶部导航在“今日简报”、“网络延迟”和“IP 质量”之间切换；网络检测按国家和地区展示固定的门户、新闻、流媒体及社交站点。每个站点连续检测 5 次，并以成功样本的平均耗时作为结果；接口不接受用户提供的目标地址。关闭 60s 功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 和网络检测服务都只接入内部 Docker 网络，不发布宿主机端口。
 
 可选中转只作用于生成的客户端入口：客户端先连接中转机，中转机把原始 TCP 流量转发到节点 `443`，REALITY 的 SNI 和服务端域名仍使用 `DOMAIN`。
+
+## IP 质量检测
+
+网站顶部新增「IP 质量」标签页，展示基础信息、IP 类型、各来源风险评分、风险因子、流媒体与 AI 解锁、邮件与黑名单六个模块。点击「开始检测」后由 `network-check` 容器检测服务器出口，支持 IPv4、IPv6 和双栈；双栈分别保留每个协议的结果，单个协议失败不会覆盖另一个协议的报告。导出按钮下载 JSON，包含原始引擎数据、时间和错误信息。
+
+更新代码后执行 `./manage.sh up`，会重新构建检测镜像并渲染 Caddy 路由。功能随 `ENABLE_60S=true` 的完整站点启用，关闭完整站点后不提供检测 API。
+
+- `GET /api/ip-quality?family=4|6|dual` 读取任务状态，不启动检测。
+- `POST /api/ip-quality?family=4|6|dual` 启动检测，要求 `Content-Type: application/json` 且请求体为空。只接受协议选项，不接受任意 IP、域名、代理或脚本参数。
+- 同时最多运行一个 IP 检测任务，同协议请求复用任务。成功或部分成功结果缓存 5 分钟，全部失败后等待 60 秒才能重试。脚本每个协议最多运行 5 分钟，随后执行有超时限制的邮件和 DNSBL 探测。
+- 风险分数按来源分别展示，不生成综合分。数据缺失、流媒体探测失败、DNS 查询失败均与正常结果区分；IPv6 暂不进行 DNSBL 查询。邮件仅检查出站 SMTP 欢迎响应，不绑定公网源 IP 或特权端口，不发送邮件。
+- 引擎固定为 [xykt/IPQuality](https://github.com/xykt/IPQuality) 的 `ad222ab16778be2a13a174cd1acbd69fb4cac6b7`，源码和参考数据随镜像打包。运行时不下载或安装脚本，不生成在线分享报告。查询仍需连接上游数据库、流媒体及邮件服务，外部服务变动或限流可能造成部分项目不可用。
+
+**IPv6 网络要求：** 检测使用容器的出口网络。默认 Compose 的 `edge` 网络仅启用 IPv4；服务器即使配置了 AAAA 记录，也不代表容器可以通过 IPv6 出站。需要 IPv6 检测时，可在 `compose.override.yaml` 中添加以下配置，并在维护窗口重建网络（停止再启动服务会短暂中断网站及代理）：
+
+```yaml
+networks:
+  edge:
+    enable_ipv6: true
+```
+
+```bash
+./manage.sh down
+./manage.sh up
+```
+
+宿主机仍需有可用的 IPv6 出站路由。Docker 使用自定义 bridge 的 IPv6 与 NAT 功能，参见 [Docker bridge 网络文档](https://docs.docker.com/engine/network/drivers/bridge/#use-ipv6-in-a-user-defined-bridge-network)。没有可用 IPv6 出口时，页面显示明确错误，不用 IPv4 结果替代。
+
+检测服务保留上游 AGPL 许可证与适配说明；网页底部可下载包含服务、适配器和上游文件的源码包。详见 [network-check/NOTICE.md](network-check/NOTICE.md)。
 
 ## 前提条件
 
@@ -413,4 +442,4 @@ sudo ss -ltnp '( sport = :80 or sport = :443 )'
 
 ## 许可证
 
-本项目采用 [MIT License](LICENSE)。
+原创代码采用 [MIT License](LICENSE)。随附的 IPQuality 引擎与 shell 适配器保留 AGPL-3.0 许可，详见 [检测引擎说明](network-check/NOTICE.md) 和 [上游许可证](network-check/vendor/IPQuality/LICENSE)。

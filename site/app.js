@@ -221,7 +221,7 @@
   const EXPECTED_TARGETS = 22;
   const EXPECTED_SAMPLES = 5;
   const NETWORK_SCHEMA_VERSION = 3;
-  const VALID_VIEWS = new Set(["briefing", "network"]);
+  const VALID_VIEWS = new Set(["briefing", "network", "quality"]);
 
   const elements = {
     links: [...document.querySelectorAll("[data-view-link]")],

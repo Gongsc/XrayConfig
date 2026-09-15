@@ -3,11 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="每天 60 秒浏览世界新闻，并检测当前服务器到主流站点的网络延迟。">
+    <meta name="description" content="每天 60 秒浏览世界新闻，检测服务器网络延迟与出口 IP 质量。">
     <meta name="theme-color" content="#f7f8fb">
     <title>60 秒读世界 · 网络检测</title>
     <link rel="stylesheet" href="/style.css">
     <script src="/app.js" defer></script>
+    <script src="/quality.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -27,6 +28,10 @@
         <a class="nav-link" href="#network" data-view-link="network">
           <span class="nav-index">02</span>
           <span>网络延迟</span>
+        </a>
+        <a class="nav-link" href="#quality" data-view-link="quality">
+          <span class="nav-index">03</span>
+          <span>IP 质量</span>
         </a>
       </nav>
       <div class="header-actions">
@@ -74,7 +79,7 @@
             <span class="overview-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12h4l2-7 4 14 2-7h6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg>
             </span>
-            <span class="overview-copy"><strong>服务已就绪</strong><span>新闻与网络检测双通道</span></span>
+            <span class="overview-copy"><strong>服务已就绪</strong><span>新闻 · 网络延迟 · IP 质量</span></span>
           </div>
         </section>
 
@@ -161,6 +166,43 @@
         <aside class="method-note">
           <p class="daily-note-label">如何计算</p>
           <p>每个站点由服务器连续检测 5 次，每次结果都会实时显示；站点主数值为成功样本的平均耗时。绿色、黄色和红色分别表示流畅、一般和较慢，失败使用灰色并保留原因。</p>
+        </aside>
+      </div>
+      <div class="page-view" id="quality-view" data-view="quality" hidden>
+        <section class="quality-intro" aria-labelledby="quality-title">
+          <p class="kicker">IP QUALITY CHECK</p>
+          <h1 class="visually-hidden" id="quality-title">IP 质量检测</h1>
+          <p class="summary">了解当前服务器出口的归属、风险与服务可用性。</p>
+        </section>
+        <div class="quality-controls">
+          <div class="quality-target"><strong>检测对象</strong><span>当前服务器出口</span></div>
+          <fieldset class="quality-family" id="quality-family">
+            <legend class="visually-hidden">检测 IP 协议</legend>
+            <label><input type="radio" name="quality-family" value="4" checked><span>IPv4</span></label>
+            <label><input type="radio" name="quality-family" value="6"><span>IPv6</span></label>
+            <label><input type="radio" name="quality-family" value="dual"><span>双栈</span></label>
+          </fieldset>
+          <div class="quality-actions">
+            <button class="quality-button" id="quality-export" type="button" disabled>
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M12 3v12m-4-4 4 4 4-4M4 15v5h16v-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              导出报告
+            </button>
+            <button class="quality-button quality-primary" id="quality-start" type="button">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>
+              <span>开始检测</span>
+            </button>
+          </div>
+        </div>
+        <div class="quality-meta">
+          <p id="quality-status" role="status" aria-live="polite">点击开始检测，查看当前服务器的 IP 质量。</p>
+          <p id="quality-time">完整检测可能需要数分钟</p>
+        </div>
+        <div class="quality-report-switch" id="quality-report-switch" role="group" aria-label="选择协议报告" hidden></div>
+        <div class="quality-grid" id="quality-results" aria-busy="false"></div>
+        <noscript><p class="notice">需要启用 JavaScript 才能进行 IP 质量检测。</p></noscript>
+        <aside class="quality-notes">
+          <p>结果反映服务器出口，各数据源可能存在差异；未返回的数据会显示为「暂无数据」。流媒体检测不保证账号可用，邮件连通性不代表投递成功率。</p>
+          <p>检测引擎：<a href="https://github.com/xykt/IPQuality" target="_blank" rel="noopener noreferrer">xykt / IPQuality</a> · <a href="/api/ip-quality/source">下载检测服务源码与许可证</a></p>
         </aside>
       </div>
     </main>

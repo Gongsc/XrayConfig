@@ -628,6 +628,11 @@ render_files() {
           print "      flush_interval -1"
           print "    }"
           print "  }"
+          print ""
+          print "  handle /api/ip-quality* {"
+          print "    uri replace /api/ip-quality /quality"
+          print "    reverse_proxy network-check:8080"
+          print "  }"
         }
         next
       }

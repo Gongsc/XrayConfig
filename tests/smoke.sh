@@ -37,7 +37,9 @@ grep -q '^SIXTY_SECONDS_IMAGE=vikiboss/60s:2.55.0$' "$FIRST_DEPLOY_DIR/.env"
 
 bash -n "$REPO_DIR/scripts/bootstrap-server.sh"
 node --check "$REPO_DIR/site/app.js"
-node --test "$REPO_DIR/network-check/server.test.js"
+node --check "$REPO_DIR/site/quality.js"
+bash -n "$REPO_DIR/network-check/ip-quality.sh"
+node --test "$REPO_DIR"/network-check/*.test.js "$REPO_DIR"/tests/*.test.js
 "$REPO_DIR/scripts/bootstrap-server.sh" --help | grep -q 'Docker Engine and Compose'
 grep -q 'https://download.docker.com/linux/' "$REPO_DIR/scripts/bootstrap-server.sh"
 grep -q "ufw allow 80/tcp" "$REPO_DIR/scripts/bootstrap-server.sh"
@@ -89,6 +91,8 @@ grep -q '^    reverse_proxy news-api:4399$' "$TEST_DIR/generated/Caddyfile"
 grep -q '^  handle /api/network-check {' "$TEST_DIR/generated/Caddyfile"
 grep -q '^    reverse_proxy network-check:8080 {' "$TEST_DIR/generated/Caddyfile"
 grep -q '^      flush_interval -1$' "$TEST_DIR/generated/Caddyfile"
+grep -Fq 'handle /api/ip-quality* {' "$TEST_DIR/generated/Caddyfile"
+grep -Fq 'uri replace /api/ip-quality /quality' "$TEST_DIR/generated/Caddyfile"
 grep -q 'fetch(API_ENDPOINT' "$TEST_DIR/site/app.js"
 grep -q 'fetch(NETWORK_ENDPOINT' "$TEST_DIR/site/app.js"
 grep -q 'EXPECTED_SAMPLES = 5' "$TEST_DIR/site/app.js"
@@ -138,6 +142,7 @@ ruby -pi -e '
 grep -q '^    root \* /srv/static$' "$TEST_DIR/generated/Caddyfile"
 ! grep -q 'reverse_proxy news-api:4399' "$TEST_DIR/generated/Caddyfile"
 ! grep -q 'reverse_proxy network-check:8080' "$TEST_DIR/generated/Caddyfile"
+! grep -q '/api/ip-quality' "$TEST_DIR/generated/Caddyfile"
 ! grep -Eq '__[A-Z0-9_]+__' "$TEST_DIR/generated/Caddyfile"
 grep -Eq '^vless://11111111-2222-4333-8444-555555555555@node\.example\.com:443\?.*sni=node\.example\.com' \
   "$TEST_DIR/generated/client.txt"
