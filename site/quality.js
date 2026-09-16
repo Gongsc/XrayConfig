@@ -25,6 +25,25 @@
     if (/^(仅自制|仅网页|仅APP|禁会员|NF\.Only|WebOnly|APPOnly|NoPrem\.)$/i.test(text(value))) return "warning";
     return "";
   }
+  function mediaLabel(data) {
+    const region = text(data.Region);
+    return [text(data.Status), /^[A-Za-z]{2}$/.test(region) ? region.toUpperCase() : "", text(data.Type)].filter(Boolean).join(" · ");
+  }
+  function redactJob(payload) {
+    const result = JSON.parse(JSON.stringify(payload));
+    for (const entry of result.results || []) {
+      const ip = entry.raw?.Head?.IP;
+      if (typeof ip !== "string" || ip.includes("*")) continue;
+      const masked = /^\d+\.\d+\.\d+\.\d+$/.test(ip) ? `${ip.split(".").slice(0, 2).join(".")}.*.*`
+        : ip.includes(":") ? `${ip.split(":").slice(0, 2).map((part) => part || "0").join(":")}:*:*:*:*:*:*` : "已隐藏";
+      const visit = (value) => typeof value === "string" ? (ip ? value.split(ip).join(masked).split(encodeURIComponent(ip)).join(encodeURIComponent(masked)) : value)
+        : Array.isArray(value) ? value.map(visit)
+          : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, visit(item)])) : value;
+      entry.raw = visit(entry.raw);
+      entry.raw.Head.IP = masked;
+    }
+    return result;
+  }
   function scoreNumber(value) {
     const raw = text(value);
     if (!/^\d+(\.\d+)?%?$/.test(raw)) return null;
@@ -32,7 +51,7 @@
     return number >= 0 && number <= 100 ? number : null;
   }
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { text, factorSummary, mediaTone, scoreNumber };
+    module.exports = { text, factorSummary, mediaTone, scoreNumber, mediaLabel, redactJob };
   }
   if (typeof document === "undefined") return;
 
@@ -136,8 +155,7 @@
     for (const [key, label] of Object.entries(MEDIA)) {
       const data = raw.Media[key] || {};
       const value = el("span", "quality-service-result");
-      value.append(pill([text(data.Status), text(data.Region)].filter(Boolean).join(" · "), mediaTone(data.Status)));
-      if (text(data.Type)) value.append(el("small", "", text(data.Type)));
+      value.append(pill(mediaLabel(data), mediaTone(data.Status)));
       grid.append(row(label, value));
     }
     container.append(grid);
@@ -228,7 +246,7 @@
         (payload.status !== "idle" && (payload.family !== family || !Array.isArray(payload.results)))) {
         throw new Error("检测服务返回了无法识别的数据");
       }
-      job = payload;
+      job = redactJob(payload);
       render();
       if (job.status === "running") pollTimer = window.setTimeout(() => request(), 3000);
     } catch (error) {

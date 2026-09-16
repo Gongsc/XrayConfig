@@ -16,3 +16,9 @@ The web UI offers `/api/ip-quality/source`, a complete source archive of this
 service, its adapter, reference data and licenses, for users of the hosted
 checker. The Node server and frontend are original project code under the
 repository's MIT license; the shell adapter and upstream retain their license.
+
+Additional adapter fixes: strip terminal colors before region brackets, validate
+Prime Video's currentTerritory field (plain or typed value), and report unknown
+territories without misclassifying page fragments as country codes. The Node
+service masks the exit IP before caching or returning a report; full IPs are
+used only internally for probes. IPv4 retains two octets, IPv6 two hextets.

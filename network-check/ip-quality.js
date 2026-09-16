@@ -4,6 +4,7 @@ const { spawn } = require("node:child_process");
 const { isIP } = require("node:net");
 const path = require("node:path");
 const { checkMail, checkDNSBL } = require("./quality-probes");
+const { publicReport } = require("./quality-report");
 
 const CACHE_MS = 5 * 60_000;
 const FAILURE_CACHE_MS = 60_000;
@@ -95,7 +96,7 @@ function createQualityService({ runner = runFamily, now = Date.now } = {}) {
         for (const version of family === "dual" ? ["4", "6"] : [family]) {
           const started = now();
           try {
-            const raw = await runner(version, controller.signal);
+            const raw = publicReport(await runner(version, controller.signal));
             job.results.push({ family: version, status: "complete", raw,
               checkedAt: new Date(now()).toISOString(), durationMs: now() - started });
           } catch (error) {

@@ -7,6 +7,7 @@ QUALITY_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 case "${1:-}" in 4|6) family="$1" ;; *) exit 64 ;; esac
 source <(sed -e '/^generate_random_user_agent$/,$d' \
   -e 's/${ipapi\[ipqs\]:-null}/${ipqs[score]:-null}/g' \
+  -e 's@//\[\]\[\]/@@g' \
   "$QUALITY_DIR/vendor/IPQuality/ip.sh")
 
 # Pin reference data too. All other HTTP probes use the requested IP family.
@@ -24,7 +25,24 @@ countRunTimes() { :; }
 show_progress_bar() { :; }
 kill_progress_bar() { :; }
 clean_ansi() {
-  printf '%b' "$1" | command sed -E $'s/\033\\[[0-9;]*m//g; s/^[[:space:]]*//; s/[[:space:]]*$//'
+  printf '%b' "$1" | command sed -E $'s/\033\\[[0-9;]*m//g; s/^[[:space:]]*//; s/[[:space:]]*$//; s/^\\[//; s/\\]$//'
+}
+# Validate the actual territory field rather than splitting arbitrary page text.
+MediaUnlockTest_PrimeVideo_Region() {
+  amazon=()
+  local page region
+  if ! page=$(curl -f -sL --user-agent "$UA_Browser" --max-time 10 "https://www.primevideo.com"); then
+    amazon[ustatus]="${smedia[bad]}"
+    return
+  fi
+  region=$(printf '%s' "$page" | node "$QUALITY_DIR/quality-report.js")
+  if [[ ! $region =~ ^[A-Z]{2}$ ]]; then
+    amazon[ustatus]="区域待确认"
+    return
+  fi
+  amazon[ustatus]="${smedia[yes]}"
+  amazon[uregion]="$region"
+  amazon[utype]=$(Get_Unlock_Type "$(Check_DNS_1 www.primevideo.com)" "$(Check_DNS_3 www.primevideo.com)")
 }
 # Native Node probes handle SMTP in a bridge network and distinguish DNS errors.
 check_mail() { services=(); smail[local]=2; smail[remote]=0; }

@@ -30,6 +30,7 @@ IP=203.0.113.42
 ipqs[score]=17
 ipapi[ipqs]=99
 ipinfo[susetype]="\${Font_Green}机房\${Font_Suffix}"
+youtube[uregion]="  \${Font_Red}[CN]\${Font_Green}   "
 smail[local]=2
 services=()
 ipjson='{"Head":{},"Info":{},"Type":{},"Score":{},"Factor":{},"Media":{},"Mail":{}}'
@@ -43,6 +44,7 @@ printf '%s' "$ipjson"
   const raw = parseScriptOutput(result.stdout, "4");
   assert.equal(raw.Score.IPQS, "17");
   assert.equal(raw.Type.Usage.IPinfo, "机房");
+  assert.equal(raw.Media.Youtube.Region, "CN");
 });
 
 test("upstream parser preserves zero/false/null and rejects wrong IP family or shape", () => {
@@ -93,7 +95,7 @@ test("dual-stack keeps an IPv4 report when IPv6 fails and retries failures after
   assert.deepEqual(calls, ["4", "6"]);
   const job = service.get("dual");
   assert.equal(job.status, "partial");
-  assert.equal(job.results[0].raw.Head.IP, "203.0.113.42");
+  assert.equal(job.results[0].raw.Head.IP, "203.0.*.*");
   assert.equal(job.results[1].error, "无 IPv6 出口");
   service.start("6");
   await tick();
