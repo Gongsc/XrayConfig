@@ -63,6 +63,9 @@ ruby -e '
   abort "60s API must be optional" unless news_api.fetch("profiles") == ["news"]
   abort "network checks must be optional with the full site" unless network_check.fetch("profiles") == ["news"]
   abort "network checks must not publish host ports" if network_check.key?("ports")
+  abort "IP quality egress network must enable IPv6" unless compose.fetch("networks").fetch("quality-egress").fetch("enable_ipv6") == true
+  abort "only the network check container should use IPv6 egress" unless network_check.fetch("networks").include?("quality-egress") &&
+    compose.fetch("services").all? { |name, service| name == "network-check" || !service.fetch("networks").include?("quality-egress") }
   abort "60s API image must be configurable and pinned" unless news_api.fetch("image") == "${SIXTY_SECONDS_IMAGE:-vikiboss/60s:2.54.0}"
   compose.fetch("services").each do |name, service|
     logging = service.fetch("logging")

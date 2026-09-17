@@ -160,7 +160,7 @@ test("runner handles engine absence, exit status, timeout and malformed output",
   const runNode = (code, timeoutMs = 1000) => runScript("6", {
     timeoutMs, spawnImpl: (_cmd, _args, opts) => spawn(process.execPath, ["-e", code], opts),
   });
-  await assert.rejects(runNode("process.exit(60)"), /未获取到 IPv6/);
+  await assert.rejects(runNode("process.exit(60)"), /检测容器无法通过 IPv6 连接公网/);
   await assert.rejects(runNode("console.log('not JSON')"), /解析失败/);
   await assert.rejects(runNode("setInterval(()=>{},1000)", 60), /超时/);
   await assert.rejects(runScript("4", { spawnImpl: (_cmd, _args, opts) => spawn("/nonexistent/engine", [], opts) }), /无法启动/);

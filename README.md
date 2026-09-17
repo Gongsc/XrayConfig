@@ -29,20 +29,14 @@ ACME CA ── HTTP :80 ──────────────────�
 - 风险分数按来源分别展示，不生成综合分。数据缺失、流媒体探测失败、DNS 查询失败均与正常结果区分；IPv6 暂不进行 DNSBL 查询。邮件仅检查出站 SMTP 欢迎响应，不绑定公网源 IP 或特权端口，不发送邮件。
 - 引擎固定为 [xykt/IPQuality](https://github.com/xykt/IPQuality) 的 `ad222ab16778be2a13a174cd1acbd69fb4cac6b7`，源码和参考数据随镜像打包。运行时不下载或安装脚本，不生成在线分享报告。查询仍需连接上游数据库、流媒体及邮件服务，外部服务变动或限流可能造成部分项目不可用。
 
-**IPv6 网络要求：** 检测使用容器的出口网络。默认 Compose 的 `edge` 网络仅启用 IPv4；服务器即使配置了 AAAA 记录，也不代表容器可以通过 IPv6 出站。需要 IPv6 检测时，可在 `compose.override.yaml` 中添加以下配置，并在维护窗口重建网络（停止再启动服务会短暂中断网站及代理）：
-
-```yaml
-networks:
-  edge:
-    enable_ipv6: true
-```
+**IPv6 网络要求：** 检测容器同时连接内部 `edge` 网络和独立的 `quality-egress` 网络；后者启用 IPv6，避免为了检测功能重建网站与代理共用的网络。宿主机仍需有可用的 IPv6 出站路由，Docker 需能为用户自定义桥接网络分配 IPv6 地址并设置 NAT。更新后可只重建检测容器：
 
 ```bash
-./manage.sh down
-./manage.sh up
+docker compose --env-file .env --profile news up -d --build --no-deps network-check
+docker compose --env-file .env --profile news exec network-check curl -6 -fsSI --max-time 10 https://api64.ipify.org
 ```
 
-宿主机仍需有可用的 IPv6 出站路由。Docker 使用自定义 bridge 的 IPv6 与 NAT 功能，参见 [Docker bridge 网络文档](https://docs.docker.com/engine/network/drivers/bridge/#use-ipv6-in-a-user-defined-bridge-network)。没有可用 IPv6 出口时，页面显示明确错误，不用 IPv4 结果替代。
+第二条命令应返回 HTTP 响应头；若宿主机 `curl -6 -I https://api64.ipify.org` 可以成功而容器中失败，应检查 Docker 的 IPv6 网络、出站转发及 NAT。详见 [Docker IPv6 桥接网络文档](https://docs.docker.com/engine/network/drivers/bridge/#use-ipv6-in-a-user-defined-bridge-network)。没有可用 IPv6 出口时，页面显示明确错误，不用 IPv4 结果替代。
 
 检测服务保留上游 AGPL 许可证与适配说明；网页底部可下载包含服务、适配器和上游文件的源码包。详见 [network-check/NOTICE.md](network-check/NOTICE.md)。
 

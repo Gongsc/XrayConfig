@@ -63,7 +63,8 @@ function runScript(family, { spawnImpl = spawn, timeoutMs = SCRIPT_TIMEOUT_MS, s
     child.once("close", (code) => {
       cleanup();
       if (failure) { reject(failure); return; }
-      if (code === 40 || code === 60) { reject(new Error(`未获取到 IPv${family} 出口，请检查服务器网络`)); return; }
+      if (code === 40) { reject(new Error("检测容器没有可用的 IPv4 公网出口")); return; }
+      if (code === 60) { reject(new Error("检测容器无法通过 IPv6 连接公网，请检查 Docker IPv6 网络和宿主机出站路由")); return; }
       if (code !== 0) { reject(new Error("检测引擎执行失败，请检查服务依赖与网络")); return; }
       try { resolve(parseScriptOutput(stdout, family)); }
       catch { reject(new Error("检测报告解析失败，请稍后重试")); }
