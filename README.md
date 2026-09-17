@@ -2,15 +2,7 @@
 
 这个项目默认在同一台 VPS 上运行 Xray、Caddy，以及可选的 60s API 与网络检测服务：
 
-```text
-浏览器 ── HTTPS :443 ──┐                                      ┌─ 静态页面
-                       ├─ Xray :8443 ── 未通过 REALITY 验证 ── Caddy :8443
-代理客户端 ─ REALITY ──┘              └─ 验证通过 ──────────── Internet
-                                                               ├─ /api/60s ── 60s API :4399（可选）
-                                                               └─ /api/network-check ── 网络检测 :8080（可选）
-
-ACME CA ── HTTP :80 ───────────────────────────────────────── Caddy :8080
-```
+![VLESS + REALITY 与 HTTPS 网站共用 443 的项目架构图](docs/architecture.svg)
 
 公网 `443/TCP` 始终由 Xray 接收。有效的 VLESS + REALITY 流量进入代理；普通浏览器 TLS 握手会按 REALITY 的 `target` 机制转发到内部 Caddy。默认网站可通过顶部导航在“今日简报”、“网络延迟”和“IP 质量”之间切换；网络检测按国家和地区展示固定的门户、新闻、流媒体及社交站点。每个站点连续检测 5 次，并以成功样本的平均耗时作为结果；接口不接受用户提供的目标地址。关闭 60s 功能后只启动 Xray 与 Caddy，并显示不依赖 JavaScript 或外部服务的静态欢迎页。公网 `80/TCP` 只由 Caddy 用于证书申请和 HTTP 到 HTTPS 跳转。启用时，60s API 和网络检测服务都只接入内部 Docker 网络，不发布宿主机端口。
 

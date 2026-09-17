@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="820" viewBox="0 0 1520 820" role="img" aria-labelledby="title desc">
+  <title id="title">VLESS + REALITY 与普通 HTTPS 网站共用 443 的项目架构</title>
+  <desc id="desc">浏览器和代理客户端均连接公网 443 上的 Xray。普通 HTTPS 流量转给 Caddy，访问静态页面、60s API 与网络检测；通过 REALITY 验证的代理流量进入互联网。ACME 证书机构通过公网 80 连接 Caddy。</desc>
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#e8e4d7" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#245ed2"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#26734f"/></marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#a56616"/></marker>
+    <style>
+      text { font-family: "SFMono-Regular", Consolas, "PingFang SC", "Noto Sans CJK SC", sans-serif; fill: #25313b; }
+      .heading { font-size: 27px; font-weight: 800; }
+      .subheading { font-size: 15px; fill: #58636c; }
+      .section { font-size: 15px; font-weight: 800; letter-spacing: 1.5px; fill: #58636c; }
+      .card-title { font-size: 24px; font-weight: 800; }
+      .card-subtitle { font-size: 15px; fill: #58636c; }
+      .port { font-size: 15px; font-weight: 800; }
+      .label { font-size: 15px; font-weight: 800; }
+      .small { font-size: 13px; fill: #58636c; }
+      .outline { stroke: #303b43; stroke-width: 2.5; }
+      .blue-line { fill: none; stroke: #245ed2; stroke-width: 4; marker-end: url(#arrow-blue); }
+      .green-line { fill: none; stroke: #26734f; stroke-width: 4; marker-end: url(#arrow-green); }
+      .orange-line { fill: none; stroke: #a56616; stroke-width: 4; marker-end: url(#arrow-orange); }
+    </style>
+  </defs>
+
+  <rect width="1520" height="820" fill="#f7f4e8"/>
+  <rect width="1520" height="820" fill="url(#grid)"/>
+  <text x="48" y="55" class="heading">VLESS + REALITY / HTTPS 共用 443</text>
+  <text x="48" y="84" class="subheading">公网只开放 TCP 80 与 443；应用服务保持在 Docker 内部网络</text>
+  <rect x="354" y="121" width="1118" height="570" fill="#fffcf2" stroke="#a7aba4" stroke-width="2" stroke-dasharray="10 8"/>
+  <text x="378" y="153" class="section">同一台 VPS · DOCKER COMPOSE</text>
+  <text x="53" y="153" class="section">公网入口</text>
+
+  <!-- External clients -->
+  <rect x="56" y="210" width="232" height="90" fill="#fffdf4" class="outline"/>
+  <rect x="56" y="210" width="8" height="90" fill="#245ed2"/>
+  <text x="80" y="249" class="card-title">浏览器</text>
+  <text x="80" y="275" class="card-subtitle">普通 HTTPS 访问</text>
+
+  <rect x="56" y="384" width="232" height="90" fill="#fffdf4" class="outline"/>
+  <rect x="56" y="384" width="8" height="90" fill="#26734f"/>
+  <text x="80" y="423" class="card-title">代理客户端</text>
+  <text x="80" y="449" class="card-subtitle">VLESS + REALITY</text>
+
+  <rect x="56" y="711" width="232" height="74" fill="#fffdf4" class="outline"/>
+  <rect x="56" y="711" width="8" height="74" fill="#a56616"/>
+  <text x="80" y="748" class="card-title">ACME CA</text>
+  <text x="80" y="770" class="card-subtitle">证书申请与续期</text>
+
+  <!-- Core services -->
+  <rect x="419" y="212" width="252" height="265" fill="#303b43"/>
+  <rect x="413" y="206" width="252" height="265" fill="#e1eaff" class="outline"/>
+  <rect x="433" y="227" width="212" height="6" fill="#245ed2"/>
+  <text x="435" y="278" class="card-title">Xray</text>
+  <text x="435" y="307" class="port" fill="#164ebd">公网 443 → 容器 8443</text>
+  <path d="M434 326H642" stroke="#9aa9c7" stroke-width="2"/>
+  <text x="435" y="356" class="card-subtitle">识别 REALITY 握手</text>
+  <text x="435" y="384" class="card-subtitle">普通 TLS 转发到 Caddy</text>
+  <text x="435" y="412" class="card-subtitle">有效代理流量连接互联网</text>
+
+  <rect x="799" y="212" width="273" height="265" fill="#303b43"/>
+  <rect x="793" y="206" width="273" height="265" fill="#e5f2e5" class="outline"/>
+  <rect x="813" y="227" width="233" height="6" fill="#26734f"/>
+  <text x="815" y="278" class="card-title">Caddy</text>
+  <text x="815" y="307" class="port" fill="#26734f">内部 8443 · HTTP 8080</text>
+  <path d="M814 326H1045" stroke="#a2b3a4" stroke-width="2"/>
+  <text x="815" y="356" class="card-subtitle">HTTPS 网站与 API 路由</text>
+  <text x="815" y="384" class="card-subtitle">管理 TLS 证书</text>
+  <text x="815" y="412" class="card-subtitle">仅公网 80 用于 ACME</text>
+
+  <!-- HTTPS destinations -->
+  <rect x="1180" y="178" width="256" height="80" fill="#fffdf4" class="outline"/>
+  <rect x="1180" y="178" width="7" height="80" fill="#245ed2"/>
+  <text x="1202" y="214" class="card-title" style="font-size: 20px">静态页面</text>
+  <text x="1202" y="240" class="card-subtitle">今日简报 / 欢迎页</text>
+
+  <rect x="1180" y="289" width="256" height="80" fill="#fffdf4" class="outline"/>
+  <rect x="1180" y="289" width="7" height="80" fill="#245ed2"/>
+  <text x="1202" y="325" class="card-title" style="font-size: 20px">60s API</text>
+  <text x="1202" y="350" class="card-subtitle">/api/60s · 内部 4399</text>
+
+  <rect x="1180" y="400" width="256" height="104" fill="#fffdf4" class="outline"/>
+  <rect x="1180" y="400" width="7" height="104" fill="#245ed2"/>
+  <text x="1202" y="436" class="card-title" style="font-size: 20px">网络检测服务</text>
+  <text x="1202" y="461" class="card-subtitle">延迟 / IP 质量 · 内部 8080</text>
+  <text x="1202" y="484" class="small">IPv6 出站：quality-egress</text>
+
+  <rect x="799" y="557" width="273" height="96" fill="#fffdf4" class="outline"/>
+  <rect x="799" y="557" width="7" height="96" fill="#26734f"/>
+  <text x="823" y="598" class="card-title">互联网</text>
+  <text x="823" y="625" class="card-subtitle">代理目标 / 外部探测源</text>
+
+  <!-- Traffic paths -->
+  <path class="blue-line" d="M288 255H371V263H407"/>
+  <text x="304" y="237" class="label" fill="#164ebd">HTTPS :443</text>
+  <path class="green-line" d="M288 429H407"/>
+  <text x="304" y="412" class="label" fill="#26734f">REALITY :443</text>
+  <path class="blue-line" d="M665 280H786"/>
+  <text x="671" y="259" class="small">普通 TLS → target</text>
+  <path class="green-line" d="M539 471V604H791"/>
+  <text x="559" y="580" class="label" fill="#26734f">验证通过 · 代理流量</text>
+  <path class="blue-line" d="M1066 255H1126V218H1172"/>
+  <path class="blue-line" d="M1066 325H1172"/>
+  <path class="blue-line" d="M1066 395H1126V452H1172"/>
+  <text x="1094" y="307" class="small">可选</text>
+  <text x="1094" y="385" class="small">可选</text>
+  <path class="orange-line" d="M288 748H1114V479H1074"/>
+  <text x="348" y="736" class="label" fill="#a56616">HTTP :80 · ACME 验证</text>
+
+  <rect x="375" y="664" width="383" height="36" fill="#f2eee0" stroke="#c2bbaa"/>
+  <text x="390" y="688" class="small">edge：服务间通信 · 功能容器无公网端口</text>
+  <text x="55" y="810" class="small">图示为 ENABLE_60S=true；关闭后仅保留 Xray、Caddy 与静态欢迎页。</text>
+</svg>
