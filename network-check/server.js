@@ -197,8 +197,8 @@ function createServer({ quality = createQualityService() } = {}) {
           sendJSON(response, 400, { error: "不接受跨站请求或自定义检测参数" });
           return;
         }
-        const { statusCode, body } = quality.start(family);
-        if (statusCode === 429) response.setHeader("Retry-After", "30");
+        const { statusCode, body, retryAfterSeconds } = quality.start(family);
+        if (statusCode === 429) response.setHeader("Retry-After", String(retryAfterSeconds || 30));
         sendJSON(response, statusCode, body);
       } else {
         response.setHeader("Allow", "GET, POST");

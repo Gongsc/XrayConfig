@@ -219,6 +219,7 @@
     else if (job?.status === "error") elements.status.textContent = job.results.map((result) => result.error).join("；");
     else if (job?.status === "partial") elements.status.textContent = "部分检测完成，请切换协议查看结果与失败原因。";
     else if (job?.status === "complete") elements.status.textContent = "检测完成 · 数据源未返回的项目显示为暂无数据。";
+    else if (Date.parse(job?.retryAt) > Date.now()) elements.status.textContent = "检测间隔尚未结束，请等待按钮倒计时结束。";
     else elements.status.textContent = "点击开始检测，查看当前服务器的 IP 质量。";
     elements.time.textContent = job?.finishedAt ? `报告时间 ${new Date(job.finishedAt).toLocaleString("zh-CN", { hour12: false })} · 耗时 ${Math.round((Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 1000)} 秒`
       : "完整检测可能需要数分钟";

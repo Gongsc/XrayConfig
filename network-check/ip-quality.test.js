@@ -6,7 +6,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const { once } = require("node:events");
-const { CACHE_MS, createQualityService, parseScriptOutput, runScript } = require("./ip-quality");
+const { CACHE_MS, createQualityService, parseMinIntervalSeconds, parseScriptOutput, runScript } = require("./ip-quality");
 const { checkMail, checkDNSBL, classifyDNSBL } = require("./quality-probes");
 const { createServer } = require("./server");
 
@@ -85,7 +85,7 @@ test("one shared job runs once; cached POSTs cannot trigger additional probes", 
 test("dual-stack keeps an IPv4 report when IPv6 fails and retries failures after cooldown", async () => {
   let clock = 0;
   const calls = [];
-  const service = createQualityService({ now: () => clock, runner: async (family) => {
+  const service = createQualityService({ now: () => clock, minIntervalMs: 0, runner: async (family) => {
     calls.push(family);
     if (family === "6") throw new Error("无 IPv6 出口");
     return fixture();
@@ -104,6 +104,39 @@ test("dual-stack keeps an IPv4 report when IPv6 fails and retries failures after
   assert.equal(service.start("6").statusCode, 202);
   await tick();
   assert.equal(service.start("4; id").statusCode, 400);
+});
+
+test("global interval limits new probes across families while cached reports stay readable", async () => {
+  let clock = 1000;
+  let calls = 0;
+  let finish;
+  const service = createQualityService({ now: () => clock, minIntervalMs: 300_000,
+    runner: () => { calls += 1; return new Promise((resolve) => { finish = resolve; }); } });
+  assert.equal(service.start("4").statusCode, 202);
+  clock = 121000;
+  finish(fixture());
+  await tick();
+  assert.equal(service.start("4").statusCode, 200);
+  const limited = service.start("6");
+  assert.equal(limited.statusCode, 429);
+  assert.equal(limited.retryAfterSeconds, 300);
+  assert.equal(limited.body.retryAt, new Date(421000).toISOString());
+  assert.equal(service.get("6").retryAt, limited.body.retryAt);
+  assert.equal(calls, 1);
+  clock = 421000;
+  assert.equal(service.start("6").statusCode, 202);
+  finish(fixture("6"));
+  await tick();
+  assert.equal(calls, 2);
+});
+
+test("minimum interval accepts only bounded whole seconds", () => {
+  assert.equal(parseMinIntervalSeconds(undefined), 300);
+  assert.equal(parseMinIntervalSeconds("0"), 0);
+  assert.equal(parseMinIntervalSeconds("86400"), 86400);
+  for (const value of ["-1", "1.5", "abc", "86401", " 30", "1e3"]) {
+    assert.throws(() => parseMinIntervalSeconds(value), /IP_QUALITY_MIN_INTERVAL_SECONDS/);
+  }
 });
 
 test("runner uses argument arrays, isolated environment, and decodes split UTF-8", async () => {
@@ -188,5 +221,10 @@ test("HTTP validates protocols and methods; GET never starts a probe; POST share
     await response.json();
   }
   assert.equal(calls, 1);
+  const limited = await fetch(`${base}/quality?family=6`, { method: "POST", headers: { "Content-Type": "application/json" } });
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get("Retry-After")) > 0);
+  assert.ok((await limited.json()).retryAt);
+  assert.ok((await (await fetch(`${base}/quality?family=6`)).json()).retryAt);
   assert.equal((await fetch(`${base}/health`)).status, 200);
 });

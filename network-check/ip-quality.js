@@ -8,9 +8,18 @@ const { publicReport } = require("./quality-report");
 
 const CACHE_MS = 5 * 60_000;
 const FAILURE_CACHE_MS = 60_000;
+const DEFAULT_MIN_INTERVAL_SECONDS = 5 * 60;
 const SCRIPT_TIMEOUT_MS = 5 * 60_000;
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 const FAMILIES = new Set(["4", "6", "dual"]);
+
+function parseMinIntervalSeconds(value) {
+  if (value === undefined || value === "") return DEFAULT_MIN_INTERVAL_SECONDS;
+  if (!/^(0|[1-9]\d*)$/.test(String(value)) || Number(value) > 86400) {
+    throw new Error("IP_QUALITY_MIN_INTERVAL_SECONDS 必须是 0 到 86400 的整数");
+  }
+  return Number(value);
+}
 
 function parseScriptOutput(stdout, family) {
   const raw = JSON.parse(stdout.trim());
@@ -72,11 +81,19 @@ async function runFamily(family, signal) {
   return raw;
 }
 
-function createQualityService({ runner = runFamily, now = Date.now } = {}) {
+function createQualityService({ runner = runFamily, now = Date.now,
+  minIntervalMs = parseMinIntervalSeconds(process.env.IP_QUALITY_MIN_INTERVAL_SECONDS) * 1000 } = {}) {
   const jobs = new Map();
   let active;
+  let lastFinishedAt;
   const controller = new AbortController();
-  const snapshot = (job) => job ? JSON.parse(JSON.stringify(job)) : { status: "idle" };
+  const nextAllowedAt = () => lastFinishedAt === undefined ? 0 : lastFinishedAt + minIntervalMs;
+  const snapshot = (job) => {
+    const copy = job ? JSON.parse(JSON.stringify(job)) : { status: "idle" };
+    const retryAt = Math.max(Date.parse(copy.retryAt) || 0, nextAllowedAt());
+    if (retryAt > now()) copy.retryAt = new Date(retryAt).toISOString();
+    return copy;
+  };
   return {
     get(family) { return snapshot(jobs.get(family)); },
     start(family) {
@@ -86,6 +103,12 @@ function createQualityService({ runner = runFamily, now = Date.now } = {}) {
         return { statusCode: existing.status === "running" ? 202 : 200, body: snapshot(existing) };
       }
       if (active) return { statusCode: 429, body: { error: "服务器正在执行其他 IP 检测，请稍后重试" } };
+      if (now() < nextAllowedAt()) {
+        const retryAfterSeconds = Math.ceil((nextAllowedAt() - now()) / 1000);
+        return { statusCode: 429, retryAfterSeconds,
+          body: { error: `检测过于频繁，请在 ${retryAfterSeconds} 秒后重试`,
+            retryAt: new Date(nextAllowedAt()).toISOString() } };
+      }
       const job = {
         schemaVersion: 1, family, status: "running", startedAt: new Date(now()).toISOString(),
         results: [], total: family === "dual" ? 2 : 1,
@@ -105,9 +128,11 @@ function createQualityService({ runner = runFamily, now = Date.now } = {}) {
           }
         }
         const successes = job.results.filter((result) => result.status === "complete").length;
+        const finished = now();
         job.status = successes === job.total ? "complete" : successes ? "partial" : "error";
-        job.finishedAt = new Date(now()).toISOString();
-        job.retryAt = new Date(now() + (successes ? CACHE_MS : FAILURE_CACHE_MS)).toISOString();
+        job.finishedAt = new Date(finished).toISOString();
+        job.retryAt = new Date(finished + (successes ? CACHE_MS : FAILURE_CACHE_MS)).toISOString();
+        lastFinishedAt = finished;
         active = undefined;
       })();
       return { statusCode: 202, body: snapshot(job) };
@@ -116,4 +141,5 @@ function createQualityService({ runner = runFamily, now = Date.now } = {}) {
   };
 }
 
-module.exports = { CACHE_MS, FAMILIES, createQualityService, parseScriptOutput, runScript, runFamily };
+module.exports = { CACHE_MS, DEFAULT_MIN_INTERVAL_SECONDS, FAMILIES, createQualityService,
+  parseMinIntervalSeconds, parseScriptOutput, runScript, runFamily };

@@ -4,6 +4,8 @@ services:
   network-check:
     init: true
     pids_limit: 128
+    environment:
+      IP_QUALITY_MIN_INTERVAL_SECONDS: ${IP_QUALITY_MIN_INTERVAL_SECONDS:-300}
     build:
       context: ./network-check
     profiles:
