@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="940" viewBox="0 0 1600 940">
+  <style>
+    @font-face { font-family: 'Fusion Pixel'; src: url('fonts/fusion-pixel-12px-proportional-zh_hans.otf.woff2') format('woff2'); }
+    text { font-family: 'Fusion Pixel', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace; }
+    .label { font-size: 15px; font-weight: 800; letter-spacing: 2px; }
+    .small { font-size: 13px; font-weight: 700; }
+    .tiny { font-size: 11px; font-weight: 700; letter-spacing: 1px; }
+    .title { font-size: 31px; font-weight: 900; }
+    .value { font-size: 19px; font-weight: 900; }
+    .body { font-size: 14px; font-weight: 600; }
+  </style>
+  <rect width="1600" height="940" fill="#dad9ce"/>
+  <text x="48" y="50" class="label" fill="#303942">60 SECONDS / PIXEL EDITION</text>
+  <text x="48" y="78" class="body" fill="#52606b">亮暗主题设计预览 · 今日简报</text>
+  <text x="48" y="118" class="label" fill="#303942">LIGHT MODE</text>
+  <text x="826" y="118" class="label" fill="#303942">DARK MODE</text>
+
+  <!-- Light preview -->
+  <g transform="translate(48 138)">
+    <rect x="6" y="6" width="728" height="754" fill="#343c43"/>
+    <rect width="728" height="754" fill="#f4f0df" stroke="#343c43" stroke-width="3"/>
+    <path d="M0 60h728" stroke="#343c43" stroke-width="2"/>
+    <rect x="18" y="15" width="36" height="34" fill="#245ed2" stroke="#343c43" stroke-width="2"/>
+    <text x="25" y="38" class="small" fill="#fff">60</text>
+    <text x="68" y="36" class="label" fill="#252b32">秒读世界</text>
+    <rect x="292" y="15" width="118" height="34" fill="#245ed2" stroke="#343c43" stroke-width="2"/>
+    <text x="306" y="37" class="small" fill="#fff">今日简报</text>
+    <rect x="410" y="15" width="118" height="34" fill="#fffdf3" stroke="#343c43" stroke-width="2"/>
+    <text x="424" y="37" class="small" fill="#4e5862">网络延迟</text>
+    <rect x="528" y="15" width="110" height="34" fill="#fffdf3" stroke="#343c43" stroke-width="2"/>
+    <text x="546" y="37" class="small" fill="#4e5862">IP 质量</text>
+    <rect x="665" y="16" width="42" height="33" fill="#ebe6d1" stroke="#343c43" stroke-width="2"/>
+    <rect x="670" y="22" width="20" height="20" fill="#fffdf3" stroke="#343c43" stroke-width="2"/>
+    <rect x="27" y="91" width="678" height="236" fill="#343c43"/>
+    <rect x="20" y="84" width="678" height="236" fill="#fffdf3" stroke="#343c43" stroke-width="3"/>
+    <rect x="42" y="108" width="155" height="28" fill="#dce7ff" stroke="#343c43"/>
+    <text x="51" y="126" class="tiny" fill="#164ebd">DAILY BRIEFING</text>
+    <text x="42" y="185" class="title" fill="#252b32">今天，世界发生了什么？</text>
+    <rect x="42" y="207" width="84" height="27" fill="#d8efce" stroke="#246c4a"/>
+    <rect x="53" y="217" width="7" height="7" fill="#246c4a"/>
+    <text x="67" y="225" class="tiny" fill="#246c4a">实时更新</text>
+    <text x="42" y="268" class="body" fill="#4e5862">用一杯咖啡的片刻，读完今日值得关注的消息。</text>
+    <rect x="527" y="112" width="149" height="178" fill="#343c43"/>
+    <rect x="522" y="107" width="149" height="178" fill="#dce7ff" stroke="#343c43" stroke-width="2"/>
+    <text x="535" y="126" class="tiny" fill="#343c43">WORLD / 001</text>
+    <path d="M575 140h44v7h15v8h8v15h7v39h-7v16h-8v8h-15v8h-44v-8h-15v-8h-8v-16h-7v-39h7v-15h8v-8h15z" fill="#343c43"/>
+    <path d="M575 147h44v8h15v15h8v39h-8v16h-15v8h-44v-8h-15v-16h-8v-39h8v-15h15z" fill="#245ed2"/>
+    <path d="M568 162h31v8h8v8h-15v16h-24v-16h-8v-8h8zm39 38h22v8h8v16h-15v8h-23v-16h8z" fill="#246c4a"/>
+    <text x="535" y="273" class="tiny" fill="#343c43">SIGNAL ONLINE</text>
+    <rect x="29" y="349" width="208" height="90" fill="#343c43"/><rect x="22" y="342" width="208" height="90" fill="#fffdf3" stroke="#343c43" stroke-width="2"/>
+    <rect x="42" y="362" width="42" height="42" fill="#dce7ff" stroke="#343c43"/>
+    <text x="100" y="380" class="value" fill="#252b32">30 条新闻</text><text x="100" y="404" class="small" fill="#4e5862">今日内容已就绪</text>
+    <rect x="264" y="349" width="208" height="90" fill="#343c43"/><rect x="257" y="342" width="208" height="90" fill="#fffdf3" stroke="#343c43" stroke-width="2"/>
+    <rect x="277" y="362" width="42" height="42" fill="#dce7ff" stroke="#343c43"/>
+    <text x="335" y="380" class="value" fill="#252b32">22 个站点</text><text x="335" y="404" class="small" fill="#4e5862">覆盖 7 个地区</text>
+    <rect x="499" y="349" width="208" height="90" fill="#343c43"/><rect x="492" y="342" width="208" height="90" fill="#fffdf3" stroke="#343c43" stroke-width="2"/>
+    <rect x="512" y="362" width="42" height="42" fill="#d8efce" stroke="#343c43"/>
+    <text x="570" y="380" class="value" fill="#252b32">服务已就绪</text><text x="570" y="404" class="small" fill="#4e5862">信号稳定</text>
+    <text x="22" y="480" class="small" fill="#4e5862">&gt; 最后更新：2026 年 9 月 17 日</text>
+    <rect x="592" y="456" width="108" height="35" fill="#fffdf3" stroke="#343c43" stroke-width="2"/>
+    <text x="609" y="479" class="small" fill="#252b32">刷新简报</text>
+    <rect x="28" y="514" width="678" height="213" fill="#343c43"/>
+    <rect x="21" y="507" width="678" height="213" fill="#fffdf3" stroke="#343c43" stroke-width="3"/>
+    <rect x="22" y="508" width="676" height="46" fill="#ebe6d1"/>
+    <path d="M21 554h678M21 637h678M359 554v166" stroke="#b6b5a5" stroke-width="2"/>
+    <text x="42" y="537" class="label" fill="#252b32">▤  今日新闻</text>
+    <rect x="43" y="574" width="30" height="30" fill="#dce7ff" stroke="#245ed2"/>
+    <text x="52" y="595" class="small" fill="#164ebd">1</text>
+    <text x="85" y="592" class="body" fill="#252b32">全球要闻，每天 60 秒掌握</text>
+    <rect x="381" y="574" width="30" height="30" fill="#dce7ff" stroke="#245ed2"/>
+    <text x="390" y="595" class="small" fill="#164ebd">2</text>
+    <text x="423" y="592" class="body" fill="#252b32">值得关注的科技与生活</text>
+    <rect x="43" y="657" width="30" height="30" fill="#dce7ff" stroke="#245ed2"/>
+    <text x="52" y="678" class="small" fill="#164ebd">3</text>
+    <text x="85" y="675" class="body" fill="#252b32">各地动态，清晰呈现</text>
+    <rect x="381" y="657" width="30" height="30" fill="#dce7ff" stroke="#245ed2"/>
+    <text x="390" y="678" class="small" fill="#164ebd">4</text>
+    <text x="423" y="675" class="body" fill="#252b32">新闻列表持续更新</text>
+  </g>
+
+  <!-- Dark preview -->
+  <g transform="translate(826 138)">
+    <rect x="6" y="6" width="728" height="754" fill="#050b13"/>
+    <rect width="728" height="754" fill="#101725" stroke="#a6b5ae" stroke-width="3"/>
+    <path d="M0 60h728" stroke="#a6b5ae" stroke-width="2"/>
+    <rect x="18" y="15" width="36" height="34" fill="#91b7ff" stroke="#a6b5ae" stroke-width="2"/>
+    <text x="25" y="38" class="small" fill="#10243e">60</text>
+    <text x="68" y="36" class="label" fill="#f5f0d9">秒读世界</text>
+    <rect x="292" y="15" width="118" height="34" fill="#91b7ff" stroke="#a6b5ae" stroke-width="2"/>
+    <text x="306" y="37" class="small" fill="#10243e">今日简报</text>
+    <rect x="410" y="15" width="118" height="34" fill="#202b3a" stroke="#a6b5ae" stroke-width="2"/>
+    <text x="424" y="37" class="small" fill="#c1c8c4">网络延迟</text>
+    <rect x="528" y="15" width="110" height="34" fill="#202b3a" stroke="#a6b5ae" stroke-width="2"/>
+    <text x="546" y="37" class="small" fill="#c1c8c4">IP 质量</text>
+    <rect x="665" y="16" width="42" height="33" fill="#172332" stroke="#a6b5ae" stroke-width="2"/>
+    <rect x="683" y="22" width="20" height="20" fill="#202b3a" stroke="#a6b5ae" stroke-width="2"/>
+    <rect x="27" y="91" width="678" height="236" fill="#050b13"/>
+    <rect x="20" y="84" width="678" height="236" fill="#202b3a" stroke="#a6b5ae" stroke-width="3"/>
+    <rect x="42" y="108" width="155" height="28" fill="#263f69" stroke="#a6b5ae"/>
+    <text x="51" y="126" class="tiny" fill="#a9c9ff">DAILY BRIEFING</text>
+    <text x="42" y="185" class="title" fill="#f5f0d9">今天，世界发生了什么？</text>
+    <rect x="42" y="207" width="84" height="27" fill="#244838" stroke="#8cdaa3"/>
+    <rect x="53" y="217" width="7" height="7" fill="#8cdaa3"/>
+    <text x="67" y="225" class="tiny" fill="#8cdaa3">实时更新</text>
+    <text x="42" y="268" class="body" fill="#c1c8c4">用一杯咖啡的片刻，读完今日值得关注的消息。</text>
+    <rect x="527" y="112" width="149" height="178" fill="#050b13"/>
+    <rect x="522" y="107" width="149" height="178" fill="#263f69" stroke="#a6b5ae" stroke-width="2"/>
+    <text x="535" y="126" class="tiny" fill="#f5f0d9">WORLD / 001</text>
+    <path d="M575 140h44v7h15v8h8v15h7v39h-7v16h-8v8h-15v8h-44v-8h-15v-8h-8v-16h-7v-39h7v-15h8v-8h15z" fill="#a6b5ae"/>
+    <path d="M575 147h44v8h15v15h8v39h-8v16h-15v8h-44v-8h-15v-16h-8v-39h8v-15h15z" fill="#91b7ff"/>
+    <path d="M568 162h31v8h8v8h-15v16h-24v-16h-8v-8h8zm39 38h22v8h8v16h-15v8h-23v-16h8z" fill="#8cdaa3"/>
+    <text x="535" y="273" class="tiny" fill="#f5f0d9">SIGNAL ONLINE</text>
+    <rect x="29" y="349" width="208" height="90" fill="#050b13"/><rect x="22" y="342" width="208" height="90" fill="#202b3a" stroke="#a6b5ae" stroke-width="2"/>
+    <rect x="42" y="362" width="42" height="42" fill="#263f69" stroke="#a6b5ae"/>
+    <text x="100" y="380" class="value" fill="#f5f0d9">30 条新闻</text><text x="100" y="404" class="small" fill="#c1c8c4">今日内容已就绪</text>
+    <rect x="264" y="349" width="208" height="90" fill="#050b13"/><rect x="257" y="342" width="208" height="90" fill="#202b3a" stroke="#a6b5ae" stroke-width="2"/>
+    <rect x="277" y="362" width="42" height="42" fill="#263f69" stroke="#a6b5ae"/>
+    <text x="335" y="380" class="value" fill="#f5f0d9">22 个站点</text><text x="335" y="404" class="small" fill="#c1c8c4">覆盖 7 个地区</text>
+    <rect x="499" y="349" width="208" height="90" fill="#050b13"/><rect x="492" y="342" width="208" height="90" fill="#202b3a" stroke="#a6b5ae" stroke-width="2"/>
+    <rect x="512" y="362" width="42" height="42" fill="#244838" stroke="#a6b5ae"/>
+    <text x="570" y="380" class="value" fill="#f5f0d9">服务已就绪</text><text x="570" y="404" class="small" fill="#c1c8c4">信号稳定</text>
+    <text x="22" y="480" class="small" fill="#c1c8c4">&gt; 最后更新：2026 年 9 月 17 日</text>
+    <rect x="592" y="456" width="108" height="35" fill="#202b3a" stroke="#a6b5ae" stroke-width="2"/>
+    <text x="609" y="479" class="small" fill="#f5f0d9">刷新简报</text>
+    <rect x="28" y="514" width="678" height="213" fill="#050b13"/>
+    <rect x="21" y="507" width="678" height="213" fill="#202b3a" stroke="#a6b5ae" stroke-width="3"/>
+    <rect x="22" y="508" width="676" height="46" fill="#172332"/>
+    <path d="M21 554h678M21 637h678M359 554v166" stroke="#566877" stroke-width="2"/>
+    <text x="42" y="537" class="label" fill="#f5f0d9">▤  今日新闻</text>
+    <rect x="43" y="574" width="30" height="30" fill="#263f69" stroke="#91b7ff"/>
+    <text x="52" y="595" class="small" fill="#a9c9ff">1</text>
+    <text x="85" y="592" class="body" fill="#f5f0d9">全球要闻，每天 60 秒掌握</text>
+    <rect x="381" y="574" width="30" height="30" fill="#263f69" stroke="#91b7ff"/>
+    <text x="390" y="595" class="small" fill="#a9c9ff">2</text>
+    <text x="423" y="592" class="body" fill="#f5f0d9">值得关注的科技与生活</text>
+    <rect x="43" y="657" width="30" height="30" fill="#263f69" stroke="#91b7ff"/>
+    <text x="52" y="678" class="small" fill="#a9c9ff">3</text>
+    <text x="85" y="675" class="body" fill="#f5f0d9">各地动态，清晰呈现</text>
+    <rect x="381" y="657" width="30" height="30" fill="#263f69" stroke="#91b7ff"/>
+    <text x="390" y="678" class="small" fill="#a9c9ff">4</text>
+    <text x="423" y="675" class="body" fill="#f5f0d9">新闻列表持续更新</text>
+  </g>
+  <text x="48" y="923" class="tiny" fill="#52606b">DESIGN PREVIEW · 示例内容，仅用于展示主题与布局</text>
+</svg>

@@ -21,7 +21,7 @@
     root.dataset.theme = theme;
     toggle.setAttribute("aria-pressed", String(isDark));
     toggle.setAttribute("aria-label", isDark ? "切换到亮色主题" : "切换到暗色主题");
-    if (themeColor) themeColor.content = isDark ? "#0b1020" : "#f7f8fb";
+    if (themeColor) themeColor.content = isDark ? "#101725" : "#f4f0df";
   }
 
   applyTheme(storedTheme() || (systemTheme.matches ? "dark" : "light"));
@@ -53,6 +53,15 @@
   const CACHE_KEY = "world-in-60-seconds:v1";
   const MAX_NEWS_ITEMS = 30;
   const REQUEST_TIMEOUT_MS = 10_000;
+  const PREVIEW_MODE = new URLSearchParams(window.location.search).get("preview") === "1";
+  const PREVIEW_NEWS = [
+    "世界动态：用一分钟了解今天值得关注的消息。",
+    "科技观察：新工具正在改变人们获取信息的方式。",
+    "城市与生活：从不同视角看见身边的日常。",
+    "文化速递：发现一则值得分享的新鲜故事。",
+    "绿色话题：关注环境、能源与可持续生活。",
+    "今日提示：保持好奇，也保持独立判断。",
+  ];
 
   const elements = {
     today: document.querySelector("#today"),
@@ -180,6 +189,12 @@
   }
 
   async function loadBriefing() {
+    if (PREVIEW_MODE) {
+      render({ date: "", dayOfWeek: "", lunarDate: "", updated: "", tip: "保持好奇，也保持判断。", news: PREVIEW_NEWS }, "示例内容");
+      setStatus("预览模式 · 以下为示例内容");
+      setLoading(false);
+      return;
+    }
     if (activeController) activeController.abort();
     activeController = new AbortController();
     const timeout = window.setTimeout(() => activeController.abort(), REQUEST_TIMEOUT_MS);

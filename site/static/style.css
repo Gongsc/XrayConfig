@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Fusion Pixel";
+  src: url("/fonts/fusion-pixel-12px-proportional-zh_hans.otf.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -70,4 +78,35 @@ h1 {
   .card {
     background: #faf9f5;
   }
+}
+
+/* Static welcome page uses the same pixel palette when the full site is off. */
+:root {
+  --background: #f4f0df;
+  --surface: #fffdf3;
+  --text: #252b32;
+  --soft: #4e5862;
+  --border: #343c43;
+  --primary: #164ebd;
+  color-scheme: light;
+  font-family: "Fusion Pixel", "SFMono-Regular", Consolas, "PingFang SC", "Microsoft YaHei", monospace;
+  background: var(--background);
+  color: var(--text);
+}
+body {
+  background-color: var(--background);
+  background-image: linear-gradient(to right, rgb(52 60 67 / 10%) 1px, transparent 1px), linear-gradient(to bottom, rgb(52 60 67 / 10%) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.card { position: relative; border: 2px solid var(--border); background: var(--surface); box-shadow: 8px 8px 0 var(--border); }
+.card::before { content: ""; position: absolute; top: 1rem; right: 1rem; width: .6rem; height: .6rem; background: #245ed2; box-shadow: -1.1rem 0 #246c4a, -2.2rem 0 #8f5400; }
+.eyebrow { display: inline-block; padding: .45rem .65rem; border: 1px solid var(--border); background: #dce7ff; color: var(--primary); font-size: .72rem; letter-spacing: .12em; }
+h1 { font-family: inherit; font-weight: 900; letter-spacing: -.04em; }
+.lede { color: var(--soft); }
+.rule { width: 5rem; height: 6px; background: #245ed2; box-shadow: 6px 6px 0 var(--border); }
+.footnote { color: var(--soft); }
+@media (prefers-color-scheme: dark) {
+  :root { --background: #101725; --surface: #202b3a; --text: #f5f0d9; --soft: #c1c8c4; --border: #a6b5ae; --primary: #a9c9ff; color-scheme: dark; }
+  .eyebrow { background: #263f69; }
+  .rule { background: #91b7ff; }
 }
