@@ -21,10 +21,30 @@
     root.dataset.theme = theme;
     toggle.setAttribute("aria-pressed", String(isDark));
     toggle.setAttribute("aria-label", isDark ? "切换到亮色主题" : "切换到暗色主题");
-    if (themeColor) themeColor.content = isDark ? "#101725" : "#f4f0df";
+    if (themeColor) {
+      themeColor.content = root.dataset.visualTheme === "glass"
+        ? (isDark ? "#0d1730" : "#e9edff")
+        : (isDark ? "#101725" : "#f4f0df");
+    }
   }
 
   applyTheme(storedTheme() || (systemTheme.matches ? "dark" : "light"));
+
+  // The visual style is selected on the server; light/dark remains a visitor choice.
+  fetch("/theme-config.json", { cache: "no-store" })
+    .then((response) => {
+      if (!response.ok) throw new Error("Theme configuration unavailable");
+      return response.json();
+    })
+    .then((config) => {
+      if (config && config.visualTheme === "glass") {
+        root.dataset.visualTheme = "glass";
+        applyTheme(root.dataset.theme);
+      }
+    })
+    .catch(() => {
+      // Keep the existing pixel theme if the optional configuration cannot load.
+    });
 
   toggle.addEventListener("click", () => {
     const nextTheme = root.dataset.theme === "dark" ? "light" : "dark";
