@@ -86,39 +86,61 @@ function createQualityService({ runner = runFamily, now = Date.now,
   minIntervalMs = parseMinIntervalSeconds(process.env.IP_QUALITY_MIN_INTERVAL_SECONDS) * 1000 } = {}) {
   const jobs = new Map();
   let active;
-  let lastFinishedAt;
   const controller = new AbortController();
-  const nextAllowedAt = () => lastFinishedAt === undefined ? 0 : lastFinishedAt + minIntervalMs;
-  const snapshot = (job) => {
+  const versions = (family) => family === "dual" ? ["4", "6"] : [family];
+  const nextAllowedAt = (family) => Math.max(0, ...versions(family).map((version) => {
+    const job = jobs.get(version);
+    return job?.finishedAt ? Math.max(Date.parse(job.retryAt), Date.parse(job.finishedAt) + minIntervalMs) : 0;
+  }));
+  const snapshot = (family) => {
+    let job = jobs.get(family);
+    if (family === "dual") {
+      const reports = versions(family).map((version) => jobs.get(version)).filter(Boolean);
+      if (reports.length) {
+        const results = reports.flatMap((report) => report.results);
+        const successes = results.filter((result) => result.status === "complete").length;
+        const running = reports.some((report) => report.status === "running");
+        job = { schemaVersion: 1, family, total: 2, results,
+          status: running ? "running" : successes === 2 ? "complete" : successes ? "partial" : "error",
+          startedAt: reports.map((report) => report.startedAt).sort()[0],
+          ...(!running && { finishedAt: reports.map((report) => report.finishedAt).sort().at(-1) }) };
+      }
+    }
     const copy = job ? JSON.parse(JSON.stringify(job)) : { status: "idle" };
-    const retryAt = Math.max(Date.parse(copy.retryAt) || 0, nextAllowedAt());
+    const retryAt = nextAllowedAt(family);
     if (retryAt > now()) copy.retryAt = new Date(retryAt).toISOString();
+    else delete copy.retryAt;
     return copy;
   };
   return {
-    get(family) { return snapshot(jobs.get(family)); },
+    get(family) { return snapshot(family); },
     start(family) {
       if (!FAMILIES.has(family)) return { statusCode: 400, body: { error: "无效的 IP 协议" } };
+      if (active === family || (family !== "dual" && jobs.get(family)?.status === "running")) {
+        return { statusCode: 202, body: snapshot(family) };
+      }
       const existing = jobs.get(family);
-      if (existing && (existing.status === "running" || now() < Date.parse(existing.retryAt))) {
-        return { statusCode: existing.status === "running" ? 202 : 200, body: snapshot(existing) };
+      if (existing && now() < Date.parse(existing.retryAt)) {
+        return { statusCode: 200, body: snapshot(family) };
       }
       if (active) return { statusCode: 429, body: { error: "服务器正在执行其他 IP 检测，请稍后重试" } };
-      if (now() < nextAllowedAt()) {
-        const retryAfterSeconds = Math.ceil((nextAllowedAt() - now()) / 1000);
+      const retryAt = nextAllowedAt(family);
+      if (now() < retryAt) {
+        const retryAfterSeconds = Math.ceil((retryAt - now()) / 1000);
         return { statusCode: 429, retryAfterSeconds,
           body: { error: `检测过于频繁，请在 ${retryAfterSeconds} 秒后重试`,
-            retryAt: new Date(nextAllowedAt()).toISOString() } };
+            retryAt: new Date(retryAt).toISOString() } };
       }
-      const job = {
-        schemaVersion: 1, family, status: "running", startedAt: new Date(now()).toISOString(),
-        results: [], total: family === "dual" ? 2 : 1,
-      };
-      jobs.set(family, job);
-      active = job;
+      for (const version of versions(family)) {
+        jobs.set(version, { schemaVersion: 1, family: version, status: "running",
+          startedAt: new Date(now()).toISOString(), results: [], total: 1 });
+      }
+      active = family;
       (async () => {
-        for (const version of family === "dual" ? ["4", "6"] : [family]) {
+        for (const version of versions(family)) {
+          const job = jobs.get(version);
           const started = now();
+          job.startedAt = new Date(started).toISOString();
           try {
             const raw = publicReport(await runner(version, controller.signal));
             job.results.push({ family: version, status: "complete", raw,
@@ -127,16 +149,14 @@ function createQualityService({ runner = runFamily, now = Date.now,
             job.results.push({ family: version, status: "error",
               error: error.message || "检测失败", durationMs: now() - started });
           }
+          const finished = now();
+          job.status = job.results[0].status;
+          job.finishedAt = new Date(finished).toISOString();
+          job.retryAt = new Date(finished + (job.status === "complete" ? CACHE_MS : FAILURE_CACHE_MS)).toISOString();
         }
-        const successes = job.results.filter((result) => result.status === "complete").length;
-        const finished = now();
-        job.status = successes === job.total ? "complete" : successes ? "partial" : "error";
-        job.finishedAt = new Date(finished).toISOString();
-        job.retryAt = new Date(finished + (successes ? CACHE_MS : FAILURE_CACHE_MS)).toISOString();
-        lastFinishedAt = finished;
         active = undefined;
       })();
-      return { statusCode: 202, body: snapshot(job) };
+      return { statusCode: 202, body: snapshot(family) };
     },
     close() { controller.abort(); },
   };

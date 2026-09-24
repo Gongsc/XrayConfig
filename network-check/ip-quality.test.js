@@ -106,28 +106,57 @@ test("dual-stack keeps an IPv4 report when IPv6 fails and retries failures after
   assert.equal(service.start("4; id").statusCode, 400);
 });
 
-test("global interval limits new probes across families while cached reports stay readable", async () => {
+test("family cooldowns are independent and dual waits for the later expiry", async () => {
   let clock = 1000;
-  let calls = 0;
-  let finish;
-  const service = createQualityService({ now: () => clock, minIntervalMs: 300_000,
-    runner: () => { calls += 1; return new Promise((resolve) => { finish = resolve; }); } });
-  assert.equal(service.start("4").statusCode, 202);
+  const calls = [];
+  const service = createQualityService({ now: () => clock, minIntervalMs: 600_000,
+    runner: async (family) => { calls.push(family); return fixture(family); } });
+  service.start("4");
+  await tick();
+  assert.equal(service.get("6").retryAt, undefined);
+  assert.equal(service.start("dual").statusCode, 429);
+  assert.deepEqual(calls, ["4"]);
   clock = 121000;
-  finish(fixture());
-  await tick();
-  assert.equal(service.start("4").statusCode, 200);
-  const limited = service.start("6");
-  assert.equal(limited.statusCode, 429);
-  assert.equal(limited.retryAfterSeconds, 300);
-  assert.equal(limited.body.retryAt, new Date(421000).toISOString());
-  assert.equal(service.get("6").retryAt, limited.body.retryAt);
-  assert.equal(calls, 1);
-  clock = 421000;
   assert.equal(service.start("6").statusCode, 202);
-  finish(fixture("6"));
   await tick();
-  assert.equal(calls, 2);
+  assert.equal(service.get("4").retryAt, new Date(601000).toISOString());
+  assert.equal(service.get("6").retryAt, new Date(721000).toISOString());
+  clock = 601000;
+  const limited = service.start("dual");
+  assert.equal(limited.statusCode, 429);
+  assert.equal(limited.retryAfterSeconds, 120);
+  assert.equal(service.get("dual").retryAt, limited.body.retryAt);
+  assert.deepEqual(calls, ["4", "6"]);
+  clock = 721000;
+  assert.equal(service.start("dual").statusCode, 202);
+  await tick();
+  assert.deepEqual(calls, ["4", "6", "4", "6"]);
+});
+
+test("dual publishes shared reports and each cooldown starts at its own completion", async () => {
+  let clock = 0;
+  const finish = {};
+  const service = createQualityService({ now: () => clock, minIntervalMs: 0,
+    runner: (family) => new Promise((resolve) => { finish[family] = resolve; }) });
+  service.start("dual");
+  assert.equal(service.start("dual").statusCode, 202);
+  assert.equal(service.get("6").status, "running");
+  clock = 1000;
+  finish["4"](fixture("4"));
+  await tick();
+  assert.equal(service.get("4").status, "complete");
+  assert.equal(service.get("4").retryAt, new Date(301000).toISOString());
+  clock = 2000;
+  finish["6"](fixture("6"));
+  await tick();
+  assert.equal(service.get("6").retryAt, new Date(302000).toISOString());
+  assert.deepEqual(service.get("dual").results, [...service.get("4").results, ...service.get("6").results]);
+  clock = 301001;
+  assert.equal(service.start("dual").statusCode, 429);
+  assert.equal(service.start("4").statusCode, 202);
+  finish["4"](fixture("4"));
+  await tick();
+  assert.deepEqual(service.get("dual").results[0], service.get("4").results[0]);
 });
 
 test("minimum interval accepts only bounded whole seconds", () => {
@@ -199,7 +228,7 @@ test("SMTP selects preferred MX and preserves unknown DNS results for the select
 
 test("HTTP validates protocols and methods; GET never starts a probe; POST shares the job", async (t) => {
   let calls = 0;
-  const quality = createQualityService({ runner: async () => { calls += 1; return fixture(); } });
+  const quality = createQualityService({ runner: async (family) => { calls += 1; return fixture(family); } });
   const server = createServer({ quality });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -221,10 +250,12 @@ test("HTTP validates protocols and methods; GET never starts a probe; POST share
     await response.json();
   }
   assert.equal(calls, 1);
-  const limited = await fetch(`${base}/quality?family=6`, { method: "POST", headers: { "Content-Type": "application/json" } });
+  const limited = await fetch(`${base}/quality?family=dual`, { method: "POST", headers: { "Content-Type": "application/json" } });
   assert.equal(limited.status, 429);
   assert.ok(Number(limited.headers.get("Retry-After")) > 0);
   assert.ok((await limited.json()).retryAt);
-  assert.ok((await (await fetch(`${base}/quality?family=6`)).json()).retryAt);
+  assert.equal((await (await fetch(`${base}/quality?family=6`)).json()).retryAt, undefined);
+  assert.equal((await fetch(`${base}/quality?family=6`, { method: "POST", headers: { "Content-Type": "application/json" } })).status, 202);
+  assert.equal(calls, 2);
   assert.equal((await fetch(`${base}/health`)).status, 200);
 });

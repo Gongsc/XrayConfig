@@ -65,6 +65,7 @@
   let family = "4";
   let selected = "4";
   let job;
+  let reports;
   let pollTimer;
   let activeController;
   let requestId = 0;
@@ -177,8 +178,8 @@
   }
 
   function paint() {
-    const result = job?.results?.find((item) => item.family === selected);
-    const signature = JSON.stringify([selected, result, job?.status]);
+    const result = reports?.[selected]?.results?.[0];
+    const signature = JSON.stringify([selected, reports]);
     if (painted === signature) return;
     painted = signature;
     elements.results.replaceChildren();
@@ -188,17 +189,17 @@
       heading.append(el("span", "quality-card-number", String(index + 1).padStart(2, "0")), el("span", "", title));
       card.append(heading);
       if (result?.status === "complete") [basic, types, scores, factors, media, mail][index](card, result.raw);
-      else card.append(el("p", "quality-empty", result?.error || (job?.status === "running" ? `正在检测 IPv${selected}…` : "尚未检测")));
+      else card.append(el("p", "quality-empty", result?.error || (reports?.[selected]?.status === "running" ? `正在检测 IPv${selected}…` : "尚未检测")));
       elements.results.append(card);
     });
-    elements.switch.hidden = family !== "dual";
+    elements.switch.hidden = false;
     elements.switch.replaceChildren();
-    if (family === "dual") for (const version of ["4", "6"]) {
-      const item = job?.results?.find((entry) => entry.family === version);
+    for (const version of ["4", "6"]) {
+      const item = reports?.[version]?.results?.[0];
       const button = el("button", "quality-button", `IPv${version}${item ? item.status === "complete" ? " · 已完成" : " · 失败" : ""}`);
       button.type = "button";
       button.setAttribute("aria-pressed", String(selected === version));
-      button.addEventListener("click", () => { selected = version; paint(); });
+      button.addEventListener("click", () => { selected = version; render(); });
       elements.switch.append(button);
     }
   }
@@ -208,7 +209,7 @@
     elements.family.disabled = requesting || running;
     elements.start.disabled = requesting || running || remaining > 0;
     elements.start.querySelector("span").textContent = running ? "检测中…" : remaining > 0 ? `${remaining} 秒后可重测` : job?.results?.length ? "重新检测" : "开始检测";
-    elements.export.disabled = !job?.results?.some((result) => result.status === "complete");
+    elements.export.disabled = reports?.[selected]?.status !== "complete";
     elements.results.setAttribute("aria-busy", String(running));
   }
   function render() {
@@ -221,7 +222,8 @@
     else if (job?.status === "complete") elements.status.textContent = "检测完成 · 数据源未返回的项目显示为暂无数据。";
     else if (Date.parse(job?.retryAt) > Date.now()) elements.status.textContent = "检测间隔尚未结束，请等待按钮倒计时结束。";
     else elements.status.textContent = "点击开始检测，查看当前服务器的 IP 质量。";
-    elements.time.textContent = job?.finishedAt ? `报告时间 ${new Date(job.finishedAt).toLocaleString("zh-CN", { hour12: false })} · 耗时 ${Math.round((Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 1000)} 秒`
+    const report = reports?.[selected];
+    elements.time.textContent = report?.finishedAt ? `报告时间 ${new Date(report.finishedAt).toLocaleString("zh-CN", { hour12: false })} · 耗时 ${Math.round((Date.parse(report.finishedAt) - Date.parse(report.startedAt)) / 1000)} 秒`
       : "完整检测可能需要数分钟";
     updateControls();
     paint();
@@ -242,11 +244,24 @@
       });
       const payload = await response.json();
       if (id !== requestId) return;
-      if (!response.ok) throw new Error(payload.error || `检测服务暂不可用（HTTP ${response.status}）`);
+      if (!response.ok) {
+        if (payload.retryAt) job = { ...job, retryAt: payload.retryAt };
+        throw new Error(payload.error || `检测服务暂不可用（HTTP ${response.status}）`);
+      }
       if (!payload || !["idle", "running", "complete", "partial", "error"].includes(payload.status) ||
         (payload.status !== "idle" && (payload.family !== family || !Array.isArray(payload.results)))) {
         throw new Error("检测服务返回了无法识别的数据");
       }
+      const reportEntries = await Promise.all(["4", "6"].map(async (version) => {
+        if (version === family) return [version, redactJob(payload)];
+        const response = await fetch(`/api/ip-quality?family=${version}`, {
+          headers: { Accept: "application/json" }, cache: "no-store", signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("无法获取协议报告");
+        return [version, redactJob(await response.json())];
+      }));
+      if (id !== requestId) return;
+      reports = Object.fromEntries(reportEntries);
       job = redactJob(payload);
       render();
       if (job.status === "running") pollTimer = window.setTimeout(() => request(), 3000);
@@ -263,19 +278,19 @@
   }
   elements.family.addEventListener("change", (event) => {
     family = event.target.value;
-    selected = family === "dual" ? "4" : family;
+    if (family !== "dual") selected = family;
     job = undefined;
     render();
     request();
   });
   elements.start.addEventListener("click", () => request(true));
   elements.export.addEventListener("click", () => {
-    if (!job?.results?.some((result) => result.status === "complete")) return;
-    const blob = new Blob([JSON.stringify(job, null, 2)], { type: "application/json;charset=utf-8" });
+    if (reports?.[selected]?.status !== "complete") return;
+    const blob = new Blob([JSON.stringify(reports[selected], null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = el("a");
     link.href = url;
-    link.download = `ip-quality-${family}-${job.startedAt.slice(0, 10)}.json`;
+    link.download = `ip-quality-${selected}-${reports[selected].startedAt.slice(0, 10)}.json`;
     document.body.append(link);
     link.click();
     link.remove();

@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/glass.css">
     <script src="/app.js" defer></script>
     <script src="/quality.js" defer></script>
+    <script src="/uptime.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -36,7 +37,10 @@
         </a>
       </nav>
       <div class="header-actions">
-        <p class="today" id="today">今日简报</p>
+        <div class="header-meta">
+          <p class="today" id="today">今日简报</p>
+          <p class="server-uptime" id="server-uptime" title="服务器本次开机以来的运行时间">已运行时间读取中…</p>
+        </div>
         <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切换到暗色主题" aria-pressed="false">
           <svg class="sun-icon" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18">
             <circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/>

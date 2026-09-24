@@ -3,6 +3,7 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const { FAMILIES, createQualityService } = require("./ip-quality");
 
 const LISTEN_PORT = 8080;
@@ -160,7 +161,7 @@ function publicTarget(target) {
   };
 }
 
-function createServer({ quality = createQualityService() } = {}) {
+function createServer({ quality = createQualityService(), uptime = os.uptime } = {}) {
   const server = http.createServer(async (request, response) => {
     if (request.url === "/health") {
       response.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
@@ -169,6 +170,15 @@ function createServer({ quality = createQualityService() } = {}) {
     }
 
     const url = new URL(request.url, "http://localhost");
+    if (url.pathname === "/uptime") {
+      if (request.method !== "GET") {
+        response.setHeader("Allow", "GET");
+        sendJSON(response, 405, { error: "method not allowed" });
+      } else {
+        sendJSON(response, 200, { uptimeSeconds: Math.floor(uptime()) });
+      }
+      return;
+    }
     if (url.pathname === "/quality/source" && request.method === "GET") {
       const archive = path.join(__dirname, "ip-quality-source.tar.gz");
       if (!fs.existsSync(archive)) {
