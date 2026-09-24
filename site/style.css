@@ -171,9 +171,10 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--primary); outli
 .nav-link.is-active { background: var(--surface); box-shadow: var(--shadow-small); color: var(--primary-strong); }
 .nav-index { display: none; }
 
-.header-actions { display: flex; align-items: center; gap: .75rem; margin-left: auto; }
+.header-actions { --header-control-height: 2.35rem; display: flex; align-items: center; gap: .75rem; margin-left: auto; }
 .today { margin: 0; text-align: right; }
-.header-meta { display: grid; gap: .3rem; text-align: right; min-width: 0; }
+.header-meta { display: flex; flex-direction: column; justify-content: center; gap: .15rem; height: var(--header-control-height); text-align: right; min-width: 0; }
+.header-meta > p { line-height: 1rem; }
 .server-uptime { margin: 0; color: var(--text-soft); font-size: .68rem; font-variant-numeric: tabular-nums; }
 .theme-toggle {
   position: relative;
@@ -570,7 +571,7 @@ body {
 .nav-link.is-active { background: var(--primary); box-shadow: none; color: #fff; }
 :root[data-theme="dark"] .nav-link.is-active { color: #10243e; }
 .nav-index { display: inline; font-size: .63rem; opacity: .7; }
-.theme-toggle { width: 3.5rem; height: 2.35rem; border: 2px solid var(--border-strong); border-radius: 0; box-shadow: 3px 3px 0 var(--border-strong); }
+.theme-toggle { width: 3.5rem; height: var(--header-control-height); border: 2px solid var(--border-strong); border-radius: 0; box-shadow: 3px 3px 0 var(--border-strong); }
 .theme-toggle::after { left: .25rem; width: 1.45rem; height: 1.45rem; border: 2px solid var(--border-strong); border-radius: 0; box-shadow: none; }
 .theme-toggle svg { width: 1rem; height: 1rem; }
 .sun-icon { left: .47rem; }

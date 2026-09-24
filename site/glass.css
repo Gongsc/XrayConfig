@@ -121,9 +121,11 @@
 :root[data-visual-theme="glass"][data-theme="dark"] .nav-link.is-active { color: var(--primary-strong); }
 :root[data-visual-theme="glass"] .nav-index { display: none; }
 
+:root[data-visual-theme="glass"] .header-actions { --header-control-height: 2.25rem; }
+
 :root[data-visual-theme="glass"] .theme-toggle {
   width: 3.5rem;
-  height: 2.25rem;
+  height: var(--header-control-height);
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--surface-soft);
