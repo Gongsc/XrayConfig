@@ -109,6 +109,21 @@ sysctl net.ipv4.tcp_available_congestion_control
 
 预期当前算法为 `bbr`、默认队列为 `fq`，可用算法列表中包含 `bbr`。如果 VPS 使用不允许加载模块或修改 sysctl 的受限虚拟化内核，初始化脚本会明确报错并停止。
 
+## 配置 SSH 密钥登录
+
+先为登录用户安装公钥，并在另一个终端确认可以使用密钥连接服务器。随后单独执行：
+
+```bash
+sudo ./scripts/configure-ssh-keys.sh --dry-run
+sudo ./scripts/configure-ssh-keys.sh
+```
+
+脚本修改 `/etc/ssh/sshd_config` 和 `/etc/ssh/sshd_config.d/` 中已有的 `*.conf` 文件，将 `PasswordAuthentication`、`KbdInteractiveAuthentication` 及其旧别名 `ChallengeResponseAuthentication` 设为 `no`，将 `PubkeyAuthentication` 设为 `yes`，并用 `AuthenticationMethods publickey` 要求公钥认证。主配置顶部写入统一设置，同时改写已有的同名设置，包括 `Match` 块，避免包含文件或条件配置重新开启密码认证；`UsePAM`、`PermitRootLogin`、密钥路径和其他设置保持原样。[OpenSSH 配置说明](https://man.openbsd.org/sshd_config)
+
+每次实际变更前，脚本将原文件及其权限备份到 `/etc/ssh/.ssh-key-auth-backup-时间戳.随机后缀/`，其中 `manifest.tsv` 记录备份编号与原路径；重复执行且内容一致时不会另建备份。写入后执行 `sshd -t` 和 `sshd -T` 校验，失败则恢复本次已修改的文件。遇到范围外的已有 `Include` 文件、符号链接，或脚本暂不支持的引号/转义写法时，脚本会在写入前报错，避免遗漏其他配置；常规的 `Include "路径"` 写法支持。[OpenSSH 校验选项](https://man.openbsd.org/sshd)
+
+脚本**不会自动重启或重载 SSH 服务**；配置只在你手动重载、重启服务或服务器重启后生效。应用配置前保留当前 SSH 会话，应用后再确认新会话能通过密钥登录。初始化脚本不会自动调用此脚本。
+
 ## 部署
 
 1. 创建环境文件：

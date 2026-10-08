@@ -36,12 +36,14 @@ grep -q '^XRAY_IMAGE=ghcr.io/xtls/xray-core:26.10.1$' "$FIRST_DEPLOY_DIR/.env"
 grep -q '^SIXTY_SECONDS_IMAGE=vikiboss/60s:2.55.0$' "$FIRST_DEPLOY_DIR/.env"
 
 bash -n "$REPO_DIR/scripts/bootstrap-server.sh"
+bash -n "$REPO_DIR/scripts/configure-ssh-keys.sh"
 node --check "$REPO_DIR/site/app.js"
 node --check "$REPO_DIR/site/quality.js"
 node --check "$REPO_DIR/site/uptime.js"
 bash -n "$REPO_DIR/network-check/ip-quality.sh"
 node --test "$REPO_DIR"/network-check/*.test.js "$REPO_DIR"/tests/*.test.js
 "$REPO_DIR/scripts/bootstrap-server.sh" --help | grep -q 'Docker Engine and Compose'
+"$REPO_DIR/scripts/configure-ssh-keys.sh" --help | grep -q 'never restarted or reloaded'
 grep -q 'https://download.docker.com/linux/' "$REPO_DIR/scripts/bootstrap-server.sh"
 grep -q "ufw allow 80/tcp" "$REPO_DIR/scripts/bootstrap-server.sh"
 grep -q "ufw allow 443/tcp" "$REPO_DIR/scripts/bootstrap-server.sh"
